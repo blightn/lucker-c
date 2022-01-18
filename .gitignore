@@ -52,4 +52,6 @@ Mkfile.old
 dkms.conf
 
 # MSVS
-.vs
+.vs/
+x86/
+x64/
