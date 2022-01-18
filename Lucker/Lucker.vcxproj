@@ -282,11 +282,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="base58.c" />
+    <ClCompile Include="crypt.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="workers.c" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="base58.h" />
+    <ClInclude Include="crypt.h" />
     <ClInclude Include="defines.h" />
     <ClInclude Include="main.h" />
     <ClInclude Include="workers.h" />

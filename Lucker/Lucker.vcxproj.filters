@@ -24,6 +24,9 @@
     <ClCompile Include="base58.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="crypt.c">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="defines.h">
@@ -36,6 +39,9 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="base58.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="crypt.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

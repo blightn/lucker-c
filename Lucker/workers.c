@@ -1,22 +1,52 @@
 #include "workers.h"
 
-static PCWSTR g_pCoinSymbols[] =
+static const PCWSTR g_pCoinSymbols[] =
 {
 	L"BTC",
 	L"ETH",
 	L"LTC",
 };
 
+static DWORD	 g_dwWorkers;
 static COIN_DATA g_CoinData[ARRAYSIZE(g_pCoinSymbols)];
+static HANDLE	 g_hStopEvent = NULL;
+static PHANDLE	 g_phWorkers  = NULL;
+
+static volatile DWORD64 g_qwCycles;
 
 BOOL StartWorkers(DWORD dwCount)
 {
-	BOOL Ok = FALSE;
+	DWORD i;
+	BOOL  Ok = FALSE;
 
-	if (dwCount)
+	if (g_dwWorkers = dwCount)
 	{
-		Ok = LoadAddresses();
+		if (CryptRandomInit())
+		{
+			if (LoadAddresses())
+			{
+				if (g_hStopEvent = CreateEventW(NULL, TRUE, FALSE, NULL))
+				{
+					if (g_phWorkers = (PHANDLE)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, g_dwWorkers * sizeof(HANDLE)))
+					{
+						for (i = 0; i < g_dwWorkers && (g_phWorkers[i] = CreateThread(NULL, 0, (PTHREAD_START_ROUTINE)WorkerProc, NULL, 0, NULL)); ++i);
+
+						Ok = g_phWorkers[g_dwWorkers - 1] != NULL;
+					}
+					else
+						wprintf(L"Can't allocate memory for worker pool.\n");
+				}
+				else
+					wprintf(L"Can't create stop event.\n");
+			}
+			else
+				wprintf(L"Can't load addresses.\n");
+		}
+		else
+			wprintf(L"Can't initialize the PRNG.\n");
 	}
+	else
+		wprintf(L"The number of workers must be positive.\n");
 
 	return Ok;
 }
@@ -24,6 +54,27 @@ BOOL StartWorkers(DWORD dwCount)
 VOID StopWorkers(VOID)
 {
 	DWORD i;
+
+	if (g_hStopEvent)
+	{
+		if (g_phWorkers)
+		{
+			SetEvent(g_hStopEvent);
+			WaitForMultipleObjects(g_dwWorkers, g_phWorkers, TRUE, WAIT_TIME);
+
+			for (i = 0; i < g_dwWorkers; ++i)
+			{
+				CloseHandle(g_phWorkers[i]);
+				g_phWorkers[i] = NULL;
+			}
+
+			HeapFree(GetProcessHeap(), 0, (PVOID)g_phWorkers);
+			g_phWorkers = NULL;
+		}
+
+		CloseHandle(g_hStopEvent);
+		g_hStopEvent = NULL;
+	}
 
 	for (i = 0; i < ARRAYSIZE(g_CoinData) && g_CoinData[i].Coin != C_INVALID; ++i)
 	{
@@ -34,13 +85,18 @@ VOID StopWorkers(VOID)
 
 		ZeroMemory((PVOID)&g_CoinData[i], sizeof(g_CoinData[i]));
 	}
+
+	if (g_dwWorkers)
+	{
+		CryptRandomCleanup();
+	}
+
+	g_qwCycles = g_dwWorkers = 0;
 }
 
 DWORD64 GetCycleCount(VOID)
 {
-
-
-	return 15;
+	return InterlockedExchange64(&g_qwCycles, 0);
 }
 
 static BOOL GetDataPath(PWSTR pPath, DWORD dwSize)
@@ -167,17 +223,6 @@ static BOOL HexToBinA(PCSTR pHex, PBYTE pbBuf, DWORD dwSize)
 	return TRUE;
 }
 
-/*
-	18Dt2hJQgjkYfGMHT8YPcGCx8hcXabWLX9
-	1rH4nEXYDgwNeDq5oBp4E2aVGnpQYZrd2
-
-	0x6fa462171a62ff5ec408e8f0841f10706a66d273
-	0xa41d491d21fa13bd4df238aefcaddc0571630bc5
-
-	LKfA8QUYDdmh3c844KLa2xByV6uGdghdRL
-	LhQNq9Pm8Mj5j1tZGA1wjeZhKU11UjhvSK
-*/
-
 // Валидацию и декодирование адреса можно вынести в отдельные ф-ии (на каждую монету).
 static DWORD DecodeAddress(COIN Coin, PCSTR pAddress, PBYTE pbDecoded, DWORD dwSize)
 {
@@ -188,7 +233,7 @@ static DWORD DecodeAddress(COIN Coin, PCSTR pAddress, PBYTE pbDecoded, DWORD dwS
 	{
 		if (Coin == C_BTC && pAddress[0] == '1' || Coin == C_LTC && pAddress[0] == 'L')
 		{
-			if ((dwLen = Base58Decode(pAddress, pbDecoded/*, dwSize*/)) == DECODED_ADDRESS_SIZE + 5)
+			if ((dwLen = Base58Decode(pAddress, pbDecoded, dwSize)) == 1 + DECODED_ADDRESS_SIZE + 4)
 			{
 				MoveMemory((PVOID)pbDecoded, (PCVOID)&pbDecoded[1], dwLen - 1);
 				dwLen -= 5;
@@ -210,7 +255,6 @@ static DWORD DecodeAddress(COIN Coin, PCSTR pAddress, PBYTE pbDecoded, DWORD dwS
 	return Ok ? dwLen : 0;
 }
 
-// DECODED_ADDRESS_SIZE.
 static DWORD CopyAddresses(COIN Coin, PCSTR pData, PBYTE pbAddresses)
 {
 	PCSTR pCRLF   = NULL;
@@ -242,8 +286,7 @@ static DWORD CopyAddresses(COIN Coin, PCSTR pData, PBYTE pbAddresses)
 	return dwCount;
 }
 
-// Параметр dwSize пока не используется.
-static DWORD ParseToCoinData(COIN Coin, PCSTR pData, DWORD dwLines)
+static DWORD ParseAddresses(COIN Coin, PCSTR pData, DWORD dwLines)
 {
 	DWORD i;
 	PBYTE pbAddresses = NULL;
@@ -318,7 +361,7 @@ static BOOL LoadAddresses(VOID)
 
 						if (pData = ReadFileData(Path, NULL))
 						{
-							if ((dwAllLines = CountLines(pData)) && (dwLoadedLines = ParseToCoinData(Coin, pData, dwAllLines)))
+							if ((dwAllLines = CountLines(pData)) && (dwLoadedLines = ParseAddresses(Coin, pData, dwAllLines)))
 							{
 								wprintf(L"File %s loaded: %d/%d addresses.\n", FindData.cFileName, dwLoadedLines, dwAllLines);
 								++dwLoadedFiles;
@@ -345,25 +388,6 @@ static BOOL LoadAddresses(VOID)
 
 			Ok = GetLastError() == ERROR_NO_MORE_FILES && dwLoadedFiles /*&& dwAllFiles == dwLoadedFiles*/;
 
-			// Вывести "g_CoinData".
-			/*
-			{
-				DWORD i;
-				BYTE bBuf[512] = { 0 }; // !
-
-				wprintf(L"\n");
-
-				for (i = 0; i < ARRAYSIZE(g_CoinData); ++i)
-				{
-					wprintf(L"Coin: %d\n", g_CoinData[i].Coin);
-					wprintf(L"dwAddressCount: %d\n", g_CoinData[i].dwAddressCount);
-					CopyMemory((PVOID)bBuf, (PCVOID)g_CoinData[i].pbAddresses, (SIZE_T)g_CoinData[i].dwAddressCount * DECODED_ADDRESS_SIZE);
-				}
-
-				wprintf(L"\n");
-			}
-			//*/
-
 			FindClose(hFind);
 			hFind = INVALID_HANDLE_VALUE;
 		}
@@ -376,4 +400,16 @@ static BOOL LoadAddresses(VOID)
 	wprintf(L"%d/%d files loaded.\n\n", dwLoadedFiles, dwAllFiles);
 
 	return Ok;
+}
+
+static DWORD WINAPI WorkerProc(PVOID pvParam)
+{
+	//while (WaitForSingleObject(g_hStopEvent, 0) == WAIT_TIMEOUT)
+	while (WaitForSingleObject(g_hStopEvent, 900) == WAIT_TIMEOUT)
+	{
+		//InterlockedAdd64(&g_qwCycles, LOOP_ITERATIONS);
+		InterlockedAdd64(&g_qwCycles, 1);
+	}
+
+	return 0;
 }

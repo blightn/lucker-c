@@ -96,8 +96,8 @@ static BOOL IsSMTEnabled(PBOOL pEnabled)
 INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 {
 	SYSTEM_INFO SysInfo;
-	DWORD		dwThreads = 0;
 	BOOL		SMT		  = FALSE;
+	DWORD		dwWorkers = 0;
 	DWORD64		qwCycles  = 0;
 
 	// To prevent cyclical restarts, the system will only restart the application if it has been running for a minimum of 60 seconds.
@@ -107,23 +107,22 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 	GetNativeSystemInfo(&SysInfo);
 	IsSMTEnabled(&SMT);
 
-	// Проверить форматирование во ВСЕХ 3-х случаях (да и везде тоже).
 	if (Argc == 1)
 	{
-		wprintf(L"The auto configuring mode selected. You can also enter the number of threads (cores) to use via the command line: prog.exe [1 <= threads <= %u]\n", SysInfo.dwNumberOfProcessors);
-		dwThreads = SysInfo.dwNumberOfProcessors;
+		wprintf(L"The auto configuring mode selected. You can also enter the number of workers (threads) to use via the command line: prog.exe [1 <= workers <= %u]\n", SysInfo.dwNumberOfProcessors);
+		dwWorkers = SysInfo.dwNumberOfProcessors;
 
 		if (SMT)
 		{
-			dwThreads /= 2;
+			dwWorkers /= 2; // Сравнить.
 		}
 	}
-	else if (Argc == 2 && StrToIntExW(pArgv[1], STIF_DEFAULT, (PINT)&dwThreads) && dwThreads)
+	else if (Argc == 2 && StrToIntExW(pArgv[1], STIF_DEFAULT, (PINT)&dwWorkers) && dwWorkers)
 	{
-		dwThreads = min(dwThreads, SysInfo.dwNumberOfProcessors);
+		dwWorkers = min(dwWorkers, SysInfo.dwNumberOfProcessors);
 	}
 	else
-		wprintf(L"Improper usage. Options:\n\t1. prog.exe\n\t2: prog.exe [1 <= threads <= %u]\n", SysInfo.dwNumberOfProcessors);
+		wprintf(L"Improper usage. Options:\n\t1. prog.exe\n\t2: prog.exe [1 <= workers <= %u]\n", SysInfo.dwNumberOfProcessors);
 
 	wprintf(L"\n");
 
@@ -132,16 +131,16 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 		wprintf(L"NOTE: Simultaneous multithreading (SMT) is enabled. This means that you have half as many physical processors as logical ones.\n");
 	}
 
-	if (dwThreads)
+	if (dwWorkers)
 	{
 		if (g_hStopEvent = CreateEventW(NULL, TRUE, FALSE, NULL))
 		{
-			wprintf(L"%u/%u threads (cores) will be used.\n", dwThreads, SysInfo.dwNumberOfProcessors);
+			wprintf(L"%u/%u workers (threads) will be used.\n", dwWorkers, SysInfo.dwNumberOfProcessors);
 
-			if (StartWorkers(dwThreads))
+			if (StartWorkers(dwWorkers))
 			{
 				SetConsoleCtrlHandler((PHANDLER_ROUTINE)HandlerRoutine, TRUE);
-				wprintf(L"All threads launched. Press 'CTRL + C' to stop.\n\n");
+				wprintf(L"All workers launched. Press 'CTRL + C' to stop.\n\n");
 
 				while (WaitForSingleObject(g_hStopEvent, SECTOMS(PRINT_INTERVAL)) == WAIT_TIMEOUT)
 				{
@@ -150,17 +149,19 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 					// Проверить с "Sleep(1000)" корректность подсчёта.
 				}
 
-				StopWorkers();
+				//StopWorkers();
 
 				if (qwCycles)
 				{
 					wprintf(L"\n");
 				}
 
-				wprintf(L"All threads stopped.\n");
+				wprintf(L"All workers stopped.\n");
 			}
 			else
-				wprintf(L"Threads failed to launch.\n");
+				wprintf(L"Workers failed to launch.\n");
+
+			StopWorkers();
 
 			CloseHandle(g_hStopEvent);
 			g_hStopEvent = NULL;
@@ -169,7 +170,7 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 			wprintf(L"Can't create stop event.\n");
 	}
 	else
-		wprintf(L"The number of threads must be greater than zero.\n");
+		wprintf(L"Invalid number of workers.\n");
 
 	wprintf(L"\n");
 	system("pause");

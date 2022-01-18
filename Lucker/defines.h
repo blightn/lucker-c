@@ -17,7 +17,7 @@
 #define SECTOMS(s)	((s) * 1000)
 #define MINTOMS(m)	((m) * SECTOMS(60))
 
-#define DATA_FOLDER L"Data"
+#define WAIT_TIME	SECTOMS(5)
 
 typedef const BYTE* PCBYTE;
 typedef const VOID* PCVOID;
