@@ -29,7 +29,11 @@ BOOL StartWorkers(DWORD dwCount)
 				{
 					if (g_phWorkers = (PHANDLE)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, g_dwWorkers * sizeof(HANDLE)))
 					{
-						for (i = 0; i < g_dwWorkers && (g_phWorkers[i] = CreateThread(NULL, 0, (PTHREAD_START_ROUTINE)WorkerProc, NULL, 0, NULL)); ++i);
+						for (i = 0; i < g_dwWorkers; ++i)
+						{
+							if (!(g_phWorkers[i] = CreateThread(NULL, 0, (PTHREAD_START_ROUTINE)WorkerProc, NULL, 0, NULL)))
+								break;
+						}
 
 						Ok = g_phWorkers[g_dwWorkers - 1] != NULL;
 					}
@@ -82,9 +86,9 @@ VOID StopWorkers(VOID)
 		{
 			HeapFree(GetProcessHeap(), 0, (PVOID)g_CoinData[i].pbAddresses);
 		}
-
-		ZeroMemory((PVOID)&g_CoinData[i], sizeof(g_CoinData[i]));
 	}
+
+	ZeroMemory((PVOID)g_CoinData, sizeof(g_CoinData));
 
 	if (g_dwWorkers)
 	{
@@ -391,7 +395,7 @@ static BOOL LoadAddresses(VOID)
 			FindClose(hFind);
 			hFind = INVALID_HANDLE_VALUE;
 		}
-		else //if (GetLastError() != ERROR_FILE_NOT_FOUND)
+		else
 			wprintf(DATA_FOLDER L" folder doesn't exist.\n");
 	}
 	else
@@ -402,13 +406,118 @@ static BOOL LoadAddresses(VOID)
 	return Ok;
 }
 
+// Попробовать вариант с inline и сравнить производительность.
+static VOID HashFromPublicKey(COIN Coin, PCBYTE pbPulicKey, DWORD dwSize, PBYTE pbHash)
+{
+	switch (Coin)
+	{
+	case C_BTC:
+	case C_LTC:
+		// bHash = RIPEMD160(SHA256(bPubKey))
+		// Первые 20 байтов хэша.
+
+		CryptSHA256(pbPulicKey, dwSize, pbHash);
+		CryptRIPEMD160(pbHash, HASH_256_SIZE, pbHash);
+
+		break;
+
+	case C_ETH:
+		// bHash = KECCAK256(bPubKey)
+		// Последние 20 байтов хэша. Последние 20 байтов переместить в начало.
+
+		CryptKECCAK256(pbPulicKey, dwSize, pbHash);
+		MoveMemory((PVOID)pbHash, (PCVOID)&pbHash[HASH_256_SIZE - DECODED_ADDRESS_SIZE], DECODED_ADDRESS_SIZE);
+
+		break;
+	}
+}
+
+static VOID SavePrivateKey(COIN Coin, PCBYTE pbPrivateKey, DWORD dwSize)
+{
+	DWORD i;
+	CHAR  Buf[256];
+
+	Buf[0] = '\0';
+
+	for (i = 0; i < dwSize; ++i)
+	{
+		if (i)
+		{
+			StringCchCatA(Buf, ARRAYSIZE(Buf), ", ");
+		}
+
+		StringCchPrintfA(Buf, ARRAYSIZE(Buf), "%s0x%02X", Buf, pbPrivateKey[i]);
+	}
+
+	wprintf(L"%s private key found: %S\n", g_pCoinSymbols[Coin - 1], Buf);
+}
+
+/*
+Range of valid ECDSA private keys:
+	- Nearly every 256-bit number is a valid ECDSA private key. Specifically, any 256-bit number from 0x1 to
+		0xFFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFE BAAE DCE6 AF48 A03B BFD2 5E8C D036 4140 is a valid private key.
+	- The range of valid private keys is governed by the secp256k1 ECDSA standard used by Bitcoin.
+*/
+
+// Попробовать один контекст на все потоки.
+// Попробовать вариант с брутом только BTC и сравнить производительность.
 static DWORD WINAPI WorkerProc(PVOID pvParam)
 {
-	//while (WaitForSingleObject(g_hStopEvent, 0) == WAIT_TIMEOUT)
-	while (WaitForSingleObject(g_hStopEvent, 900) == WAIT_TIMEOUT)
+	PSECP256K1_CONTEXT pCtx = NULL;
+	BYTE			   bPrivKey[PRIVATE_KEY_SIZE],
+					   bPubKey[PUBLIC_KEY_SIZE],
+					   bPubKeyComp[PUBLIC_KEY_COMP_SIZE],
+					   bHash[HASH_256_SIZE],
+					   bHashComp[HASH_256_SIZE];
+	SECP256K1_PUBKEY   PubKey;
+	SIZE_T			   Size,
+					   SizeComp;
+	DWORD			   i,
+					   j;
+
+	ZeroMemory((PVOID)bHash,	 sizeof(bHash));	 // Временно.
+	ZeroMemory((PVOID)bHashComp, sizeof(bHashComp)); // Временно.
+
+	if (pCtx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN))
 	{
-		//InterlockedAdd64(&g_qwCycles, LOOP_ITERATIONS);
-		InterlockedAdd64(&g_qwCycles, 1);
+		while (WaitForSingleObject(g_hStopEvent, 0) == WAIT_TIMEOUT)
+		{
+			// We randomize all 32 bits without checking the range, because the chance of getting a zero or
+			// a value greater than 0xFFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFE BAAE DCE6 AF48 A03B BFD2 5E8C D036 4140
+			// is very small, but much more than the chance of getting a non-empty address ;)
+			if (CryptRandom(bPrivKey, sizeof(bPrivKey)))
+			{
+				if (secp256k1_ec_pubkey_create(pCtx, &PubKey, bPrivKey))
+				{
+					Size = sizeof(bPubKey);
+					secp256k1_ec_pubkey_serialize(pCtx, bPubKey, &Size, &PubKey, SECP256K1_EC_UNCOMPRESSED);
+
+					SizeComp = sizeof(bPubKeyComp);
+					secp256k1_ec_pubkey_serialize(pCtx, bPubKeyComp, &SizeComp, &PubKey, SECP256K1_EC_COMPRESSED);
+
+					for (i = 0; i < ARRAYSIZE(g_CoinData) && g_CoinData[i].Coin != C_INVALID; ++i)
+					{
+						HashFromPublicKey(g_CoinData[i].Coin, bPubKey,	   (DWORD)Size,		bHash);
+						HashFromPublicKey(g_CoinData[i].Coin, bPubKeyComp, (DWORD)SizeComp, bHashComp);
+
+						for (j = 0; j < g_CoinData[i].dwAddressCount; ++j)
+						{
+							if (memcmp((PCVOID)bHash,	  (PCVOID)g_CoinData[i].pbAddresses[j * DECODED_ADDRESS_SIZE], DECODED_ADDRESS_SIZE) == 0 ||
+								memcmp((PCVOID)bHashComp, (PCVOID)g_CoinData[i].pbAddresses[j * DECODED_ADDRESS_SIZE], DECODED_ADDRESS_SIZE) == 0)
+							{
+								SavePrivateKey(g_CoinData[i].Coin, bPrivKey, sizeof(bPrivKey));
+							}
+						}
+					}
+				}
+			}
+
+			InterlockedAdd64(&g_qwCycles, 1);
+			//InterlockedAdd64(&g_qwCycles, LOOP_ITERATIONS);
+		}
+
+		secp256k1_context_destroy(pCtx);
+		pCtx = NULL;
 	}
 
 	return 0;
