@@ -128,56 +128,56 @@
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)Bins\$(PlatformTarget)\$(Configuration)\</OutDir>
     <IntDir>$(PlatformTarget)\$(Configuration)\</IntDir>
-    <IncludePath>..\Libs\secp256k1\x86\include;..\Libs\openssl\x86\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\Libs\secp256k1\x86\include;..\Libs\openssl\x86\include;..\Libs\SHA3IUF\;$(IncludePath)</IncludePath>
     <LibraryPath>..\Libs\secp256k1\x86\debug\lib;..\Libs\openssl\x86\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug (static)|Win32'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)Bins\$(PlatformTarget)\$(Configuration)\</OutDir>
     <IntDir>$(PlatformTarget)\$(Configuration)\</IntDir>
-    <IncludePath>..\Libs\secp256k1\x86\include;..\Libs\openssl\x86\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\Libs\secp256k1\x86\include;..\Libs\openssl\x86\include;..\Libs\SHA3IUF\;$(IncludePath)</IncludePath>
     <LibraryPath>..\Libs\secp256k1\x86\debug\lib;..\Libs\openssl\x86\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)Bins\$(PlatformTarget)\$(Configuration)\</OutDir>
     <IntDir>$(PlatformTarget)\$(Configuration)\</IntDir>
-    <IncludePath>..\Libs\secp256k1\x86\include;..\Libs\openssl\x86\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\Libs\secp256k1\x86\include;..\Libs\openssl\x86\include;..\Libs\SHA3IUF\;$(IncludePath)</IncludePath>
     <LibraryPath>..\Libs\secp256k1\x86\lib;..\Libs\openssl\x86\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release (static)|Win32'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)Bins\$(PlatformTarget)\$(Configuration)\</OutDir>
     <IntDir>$(PlatformTarget)\$(Configuration)\</IntDir>
-    <IncludePath>..\Libs\secp256k1\x86\include;..\Libs\openssl\x86\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\Libs\secp256k1\x86\include;..\Libs\openssl\x86\include;..\Libs\SHA3IUF\;$(IncludePath)</IncludePath>
     <LibraryPath>..\Libs\secp256k1\x86\lib;..\Libs\openssl\x86\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)Bins\$(PlatformTarget)\$(Configuration)\</OutDir>
     <IntDir>$(PlatformTarget)\$(Configuration)\</IntDir>
-    <IncludePath>..\Libs\secp256k1\x64\include;..\Libs\openssl\x64\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\Libs\secp256k1\x64\include;..\Libs\openssl\x64\include;..\Libs\SHA3IUF\;$(IncludePath)</IncludePath>
     <LibraryPath>..\Libs\secp256k1\x64\debug\lib;..\Libs\openssl\x64\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug (static)|x64'">
     <LinkIncremental>true</LinkIncremental>
     <OutDir>$(SolutionDir)Bins\$(PlatformTarget)\$(Configuration)\</OutDir>
     <IntDir>$(PlatformTarget)\$(Configuration)\</IntDir>
-    <IncludePath>..\Libs\secp256k1\x64\include;..\Libs\openssl\x64\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\Libs\secp256k1\x64\include;..\Libs\openssl\x64\include;..\Libs\SHA3IUF\;$(IncludePath)</IncludePath>
     <LibraryPath>..\Libs\secp256k1\x64\debug\lib;..\Libs\openssl\x64\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)Bins\$(PlatformTarget)\$(Configuration)\</OutDir>
     <IntDir>$(PlatformTarget)\$(Configuration)\</IntDir>
-    <IncludePath>..\Libs\secp256k1\x64\include;..\Libs\openssl\x64\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\Libs\secp256k1\x64\include;..\Libs\openssl\x64\include;..\Libs\SHA3IUF\;$(IncludePath)</IncludePath>
     <LibraryPath>..\Libs\secp256k1\x64\lib;..\Libs\openssl\x64\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release (static)|x64'">
     <LinkIncremental>false</LinkIncremental>
     <OutDir>$(SolutionDir)Bins\$(PlatformTarget)\$(Configuration)\</OutDir>
     <IntDir>$(PlatformTarget)\$(Configuration)\</IntDir>
-    <IncludePath>..\Libs\secp256k1\x64\include;..\Libs\openssl\x64\include;$(IncludePath)</IncludePath>
+    <IncludePath>..\Libs\secp256k1\x64\include;..\Libs\openssl\x64\include;..\Libs\SHA3IUF\;$(IncludePath)</IncludePath>
     <LibraryPath>..\Libs\secp256k1\x64\lib;..\Libs\openssl\x64\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
@@ -297,12 +297,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\Libs\SHA3IUF\sha3.c" />
     <ClCompile Include="base58.c" />
     <ClCompile Include="crypt.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="workers.c" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\Libs\SHA3IUF\sha3.h" />
     <ClInclude Include="base58.h" />
     <ClInclude Include="crypt.h" />
     <ClInclude Include="defines.h" />

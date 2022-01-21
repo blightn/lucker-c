@@ -406,6 +406,7 @@ static BOOL LoadAddresses(VOID)
 	return Ok;
 }
 
+// Переименовать.
 // Попробовать вариант с inline и сравнить производительность.
 static VOID HashFromPublicKey(COIN Coin, PCBYTE pbPulicKey, DWORD dwSize, PBYTE pbHash)
 {
@@ -425,7 +426,7 @@ static VOID HashFromPublicKey(COIN Coin, PCBYTE pbPulicKey, DWORD dwSize, PBYTE 
 		// bHash = KECCAK256(bPubKey)
 		// Последние 20 байтов хэша. Последние 20 байтов переместить в начало.
 
-		CryptKECCAK256(pbPulicKey, dwSize, pbHash);
+		CryptKECCAK256(&pbPulicKey[1], dwSize - 1, pbHash);
 		MoveMemory((PVOID)pbHash, (PCVOID)&pbHash[HASH_256_SIZE - DECODED_ADDRESS_SIZE], DECODED_ADDRESS_SIZE);
 
 		break;
@@ -463,22 +464,17 @@ Range of valid ECDSA private keys:
 // Попробовать вариант с брутом только BTC и сравнить производительность.
 static DWORD WINAPI WorkerProc(PVOID pvParam)
 {
-	PSECP256K1_CONTEXT pCtx = NULL;
-	BYTE			   bPrivKey[PRIVATE_KEY_SIZE],
-					   bPubKey[PUBLIC_KEY_SIZE],
-					   bPubKeyComp[PUBLIC_KEY_COMP_SIZE],
-					   bHash[HASH_256_SIZE],
-					   bHashComp[HASH_256_SIZE];
-	SECP256K1_PUBKEY   PubKey;
-	SIZE_T			   Size,
-					   SizeComp;
-	DWORD			   i,
-					   j;
+	PEC_CONTEXT   pCtx = NULL;
+	BYTE		  bPrivKey[SECP256K1_PRIVATE_KEY_SIZE],
+				  bPubKey[SECP256K1_PUBLIC_KEY_SIZE],
+				  bPubKeyComp[SECP256K1_PUBLIC_KEY_COMP_SIZE],
+				  bHash[HASH_256_SIZE],
+				  bHashComp[HASH_256_SIZE];
+	EC_PUBLIC_KEY PubKey;
+	DWORD		  i,
+				  j;
 
-	ZeroMemory((PVOID)bHash,	 sizeof(bHash));	 // Временно.
-	ZeroMemory((PVOID)bHashComp, sizeof(bHashComp)); // Временно.
-
-	if (pCtx = secp256k1_context_create(SECP256K1_CONTEXT_SIGN))
+	if (pCtx = CryptECContextCreate(ECT_SECP256K1))
 	{
 		while (WaitForSingleObject(g_hStopEvent, 0) == WAIT_TIMEOUT)
 		{
@@ -487,23 +483,93 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 			// is very small, but much more than the chance of getting a non-empty address ;)
 			if (CryptRandom(bPrivKey, sizeof(bPrivKey)))
 			{
-				if (secp256k1_ec_pubkey_create(pCtx, &PubKey, bPrivKey))
-				{
-					Size = sizeof(bPubKey);
-					secp256k1_ec_pubkey_serialize(pCtx, bPubKey, &Size, &PubKey, SECP256K1_EC_UNCOMPRESSED);
+				// 5500a1ff8378cc2c257bcd6d3d0186ac9fb9d226154f793f7bcb892efb34ebc7
+				//CopyMemory((PVOID)bPrivKey, (PCVOID)"\x55\x00\xa1\xff\x83\x78\xcc\x2c\x25\x7b\xcd\x6d\x3d\x01\x86\xac\x9f\xb9\xd2\x26\x15\x4f\x79\x3f\x7b\xcb\x89\x2e\xfb\x34\xeb\xc7", 32); // For debug
 
-					SizeComp = sizeof(bPubKeyComp);
-					secp256k1_ec_pubkey_serialize(pCtx, bPubKeyComp, &SizeComp, &PubKey, SECP256K1_EC_COMPRESSED);
+				if (CryptECPublicKeyFromSecret(pCtx, bPrivKey, &PubKey))
+				{
+					CryptECPublicKeyToBytes(pCtx, &PubKey, FALSE, bPubKey,	   sizeof(bPubKey));
+					CryptECPublicKeyToBytes(pCtx, &PubKey, TRUE,  bPubKeyComp, sizeof(bPubKeyComp));
 
 					for (i = 0; i < ARRAYSIZE(g_CoinData) && g_CoinData[i].Coin != C_INVALID; ++i)
 					{
-						HashFromPublicKey(g_CoinData[i].Coin, bPubKey,	   (DWORD)Size,		bHash);
-						HashFromPublicKey(g_CoinData[i].Coin, bPubKeyComp, (DWORD)SizeComp, bHashComp);
+						HashFromPublicKey(g_CoinData[i].Coin, bPubKey,	   sizeof(bPubKey),		bHash);
+						HashFromPublicKey(g_CoinData[i].Coin, bPubKeyComp, sizeof(bPubKeyComp), bHashComp);
+
+						/*/
+						{
+							// Private key:	5500a1ff8378cc2c257bcd6d3d0186ac9fb9d226154f793f7bcb892efb34ebc7
+							//
+							// BTC:			00124ef5260c450375a9b56c3df7df7550830530c518610791, 0076b4e6afe774090703659ee017b08ad2e0ad6a118d73bb4e
+							// LTC:			30124ef5260c450375a9b56c3df7df7550830530c5ab3a8537, 3076b4e6afe774090703659ee017b08ad2e0ad6a115795e448
+							//
+							// BTC:			12fokXPiUNSVvab6gxGo7Zgni2VYZS8A4x,					1BpfSsF8nQGk2718jnnrC811XxDvoqqJBf
+							// ETH:			0x38e73420d07d32c789b4349988fd67a667a61892,			0x71322a0db59f5d49a04970ad26ffff00b23fe90e
+							// LTC:			LLtm1jhYZ2gZBPHFs6G6PakYvErpkRqPTU,					LW3ci5Yxs4WoGuhHuvn9U94mkAbCuhyRe7
+
+							CHAR PrivateKey[65],
+								Address1[128],
+								Address2[128];
+							DWORD k;
+							BYTE bTmp1[32],
+								bTmp2[32];
+
+							PrivateKey[0] = Address1[0] = Address2[0] = '\0';
+
+							for (k = 0; k < sizeof(bPrivKey); ++k)
+							{
+								StringCchPrintfA(PrivateKey, ARRAYSIZE(PrivateKey), "%s%02x", PrivateKey, bPrivKey[k]);
+							}
+
+							switch (g_CoinData[i].Coin)
+							{
+							case C_BTC:
+							case C_LTC:
+								MoveMemory((PVOID)&bHash[1],	 (PCVOID)bHash,		DECODED_ADDRESS_SIZE);
+								MoveMemory((PVOID)&bHashComp[1], (PCVOID)bHashComp, DECODED_ADDRESS_SIZE);
+
+								bHash[0] = bHashComp[0] = g_CoinData[i].Coin == C_BTC ? 0x00 : 0x30;
+
+								CryptSHA256(bHash,	   1 + DECODED_ADDRESS_SIZE, bTmp1);
+								CryptSHA256(bHashComp, 1 + DECODED_ADDRESS_SIZE, bTmp2);
+
+								CryptSHA256(bTmp1, HASH_256_SIZE, bTmp1);
+								CryptSHA256(bTmp2, HASH_256_SIZE, bTmp2);
+
+								CopyMemory((PVOID)&bHash	[1 + DECODED_ADDRESS_SIZE],	(PCVOID)bTmp1, 4);
+								CopyMemory((PVOID)&bHashComp[1 + DECODED_ADDRESS_SIZE], (PCVOID)bTmp2, 4);
+
+								// Для удобства конвертирования в Base58 - https://appdevtools.com/base58-encoder-decoder
+								for (k = 0; k < 1 + DECODED_ADDRESS_SIZE + 4; ++k)
+								{
+									StringCchPrintfA(Address1, ARRAYSIZE(Address1), "%s%02x", Address1, bHash[k]);
+									StringCchPrintfA(Address2, ARRAYSIZE(Address2), "%s%02x", Address2, bHashComp[k]);
+								}
+
+								StringCchCopyA(Address1, ARRAYSIZE(Address1), "12fokXPiUNSVvab6gxGo7Zgni2VYZS8A4x"); // Base58.
+								StringCchCopyA(Address2, ARRAYSIZE(Address2), "1BpfSsF8nQGk2718jnnrC811XxDvoqqJBf"); // Base58.
+								break;
+
+							case C_ETH:
+								StringCchCopyA(Address1, ARRAYSIZE(Address1), "0x");
+								StringCchCopyA(Address2, ARRAYSIZE(Address2), "0x");
+
+								for (k = 0; k < DECODED_ADDRESS_SIZE; ++k)
+								{
+									StringCchPrintfA(Address1, ARRAYSIZE(Address1), "%s%02x", Address1, bHash[k]);
+									StringCchPrintfA(Address2, ARRAYSIZE(Address2), "%s%02x", Address2, bHashComp[k]);
+								}
+								break;
+							}
+
+							Sleep(0);
+						}
+						//*/
 
 						for (j = 0; j < g_CoinData[i].dwAddressCount; ++j)
 						{
-							if (memcmp((PCVOID)bHash,	  (PCVOID)g_CoinData[i].pbAddresses[j * DECODED_ADDRESS_SIZE], DECODED_ADDRESS_SIZE) == 0 ||
-								memcmp((PCVOID)bHashComp, (PCVOID)g_CoinData[i].pbAddresses[j * DECODED_ADDRESS_SIZE], DECODED_ADDRESS_SIZE) == 0)
+							if (memcmp((PCVOID)bHash,	  (PCVOID)&g_CoinData[i].pbAddresses[j * DECODED_ADDRESS_SIZE], DECODED_ADDRESS_SIZE) == 0 ||
+								memcmp((PCVOID)bHashComp, (PCVOID)&g_CoinData[i].pbAddresses[j * DECODED_ADDRESS_SIZE], DECODED_ADDRESS_SIZE) == 0)
 							{
 								SavePrivateKey(g_CoinData[i].Coin, bPrivKey, sizeof(bPrivKey));
 							}
@@ -516,7 +582,7 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 			//InterlockedAdd64(&g_qwCycles, LOOP_ITERATIONS);
 		}
 
-		secp256k1_context_destroy(pCtx);
+		CryptECContextDestroy(pCtx);
 		pCtx = NULL;
 	}
 

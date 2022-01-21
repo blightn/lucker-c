@@ -131,6 +131,10 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 		wprintf(L"NOTE: Simultaneous multithreading (SMT) is enabled. This means that you have half as many physical processors as logical ones.\n");
 	}
 
+#ifdef _DEBUG
+	dwWorkers = 1; // !
+#endif
+
 	if (dwWorkers)
 	{
 		if (g_hStopEvent = CreateEventW(NULL, TRUE, FALSE, NULL))
