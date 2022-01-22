@@ -6,8 +6,17 @@
 #include "base58.h"
 #include "crypt.h"
 
-#define DATA_FOLDER			 L"Data"
-#define DECODED_ADDRESS_SIZE 20
+#define DATA_FOLDER			L"Data"
+#define NETWORK_PREFIX_SIZE 2
+#define DECODED_HASH_SIZE	20
+#define ADDRESS_SIZE		(NETWORK_PREFIX_SIZE + DECODED_HASH_SIZE)
+
+typedef enum {
+	A_1,	 // sha256 + ripemd160
+	A_2,	 // keccak256
+	A_COUNT, // Number of algorithms.
+	A_INVALID,
+} ALGORITHM;
 
 typedef enum {
 	C_INVALID,
@@ -15,6 +24,14 @@ typedef enum {
 	C_ETH,
 	C_LTC,
 } COIN;
+
+//typedef BYTE ADDRESS[DECODED_ADDRESS_SIZE], *PADDRESS[DECODED_ADDRESS_SIZE];
+
+typedef struct
+{
+	SIZE_T AddressCount;
+	PBYTE  pbAddresses; // 2 + 20 = 22 bytes each.
+} ALGORITHM_DATA, *PALGORITHM_DATA;
 
 typedef struct
 {
@@ -36,9 +53,11 @@ static DWORD CountLines(PCSTR pData);
 static BOOL HexToBin(BYTE bHex, PBYTE pbOut);
 static BOOL HexToBinA(PCSTR pHex, PBYTE pbBuf, DWORD dwSize);
 
+static ALGORITHM AlgorithmFromCoin(COIN Coin);
+
 static DWORD DecodeAddress(COIN Coin, PCSTR pAddress, PBYTE pbDecoded, DWORD dwSize);
 static DWORD CopyAddresses(COIN Coin, PCSTR pData, PBYTE pbAddresses);
-static DWORD ParseAddresses(COIN Coin, PCSTR pData, DWORD dwLines);
+static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines);
 static BOOL LoadAddresses(VOID);
 
 static VOID HashFromPublicKey(COIN Coin, PCBYTE pbPulicKey, DWORD dwSize, PBYTE pbHash);
