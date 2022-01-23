@@ -1,15 +1,22 @@
 #include "workers.h"
 
-static const PCWSTR g_pCoinSymbols[] =
+static const COIN_SYMBOL g_CoinSymbols[] =
 {
-	L"BTC",
-	L"ETH",
-	L"LTC",
+	{ C_BTC, L"BTC" },
+	{ C_ETH, L"ETH" },
+	{ C_LTC, L"LTC" },
+};
+
+// Не используется.
+static const NETWORK_PREFIX g_NetworkPrefixes[] =
+{
+	{ { 0x00, 0x00 }, 1 }, // BTC
+	{ {  '0',  'x' }, 2 }, // ETH
+	{ { 0x30, 0x00 }, 1 }, // LTC
 };
 
 static DWORD		  g_dwWorkers;
-static COIN_DATA	  g_CoinData[ARRAYSIZE(g_pCoinSymbols)];
-static ALGORITHM_DATA g_AlgData[A_COUNT];
+static ALGORITHM_DATA g_AlgorithmData[A_COUNT];
 static HANDLE		  g_hStopEvent = NULL;
 static PHANDLE		  g_phWorkers  = NULL;
 
@@ -81,15 +88,15 @@ VOID StopWorkers(VOID)
 		g_hStopEvent = NULL;
 	}
 
-	for (i = 0; i < ARRAYSIZE(g_CoinData) && g_CoinData[i].Coin != C_INVALID; ++i)
+	for (i = 0; i < ARRAYSIZE(g_AlgorithmData); ++i)
 	{
-		if (g_CoinData[i].pbAddresses)
+		if (g_AlgorithmData[i].pAddresses)
 		{
-			HeapFree(GetProcessHeap(), 0, (PVOID)g_CoinData[i].pbAddresses);
+			HeapFree(GetProcessHeap(), 0, (PVOID)g_AlgorithmData[i].pAddresses);
 		}
 	}
 
-	ZeroMemory((PVOID)g_CoinData, sizeof(g_CoinData));
+	ZeroMemory((PVOID)g_AlgorithmData, sizeof(g_AlgorithmData));
 
 	if (g_dwWorkers)
 	{
@@ -122,20 +129,6 @@ static BOOL GetDataPath(PWSTR pPath, DWORD dwSize)
 	}
 
 	return Ok;
-}
-
-// The filename must start with one of the strings from gpCoinSymbols.
-static COIN CoinFromFileName(PCWSTR pFileName)
-{
-	DWORD i;
-
-	for (i = 0; i < ARRAYSIZE(g_pCoinSymbols); ++i)
-	{
-		if (StrCmpNIW(pFileName, g_pCoinSymbols[i], lstrlenW(g_pCoinSymbols[i])) == 0)
-			return i + 1; // Because "C_INVALID == 0".
-	}
-
-	return C_INVALID;
 }
 
 static PSTR ReadFileData(PCWSTR pPath, PDWORD pdwSize)
@@ -229,6 +222,20 @@ static BOOL HexToBinA(PCSTR pHex, PBYTE pbBuf, DWORD dwSize)
 	return TRUE;
 }
 
+// The filename must start with one of the strings from gpCoinSymbols.
+static COIN CoinFromFileName(PCWSTR pFileName)
+{
+	DWORD i;
+
+	for (i = 0; i < ARRAYSIZE(g_CoinSymbols); ++i)
+	{
+		if (StrCmpNIW(pFileName, g_CoinSymbols[i].pSymbol, lstrlenW(g_CoinSymbols[i].pSymbol)) == 0)
+			return g_CoinSymbols[i].Coin;
+	}
+
+	return C_INVALID;
+}
+
 static ALGORITHM AlgorithmFromCoin(COIN Coin)
 {
 	switch (Coin)
@@ -243,48 +250,61 @@ static ALGORITHM AlgorithmFromCoin(COIN Coin)
 	}
 }
 
-// Валидацию и декодирование адреса можно вынести в отдельные ф-ии (на каждую монету).
-static DWORD DecodeAddress(COIN Coin, PCSTR pAddress, PBYTE pbDecoded, DWORD dwSize)
+static PCWSTR SymbolFromCoin(COIN Coin)
 {
-	DWORD dwLen;
-	BOOL  Ok = FALSE;
+	return g_CoinSymbols[Coin].pSymbol;
+}
 
-	if (dwLen = lstrlenA(pAddress))
+static PCWSTR SymbolFromAddress(PCADDRESS pAddress)
+{
+	return SymbolFromCoin(pAddress->Coin);
+}
+
+// Не используется.
+static PCNETWORK_PREFIX NetworkPrefixFromCoin(COIN Coin)
+{
+	return &g_NetworkPrefixes[Coin];
+}
+
+// Валидацию и декодирование адреса можно вынести в отдельные ф-ии (на каждую монету).
+// Coin можно достать из адреса.
+static BOOL DecodeAddress(COIN Coin, PCSTR pAddress, PADDRESS pAddresses)
+{
+	SIZE_T Len;
+	BYTE   bBuf[64]; // !
+	BOOL   Ok = FALSE;
+
+	if (Len = lstrlenA(pAddress))
 	{
+		pAddresses->Coin = Coin;
+
 		if (Coin == C_BTC && pAddress[0] == '1' || Coin == C_LTC && pAddress[0] == 'L')
 		{
-			if ((dwLen = Base58Decode(pAddress, pbDecoded, dwSize)) == 1 + DECODED_HASH_SIZE + 4)
+			if (Base58Decode(pAddress, bBuf, ARRAYSIZE(bBuf)) == 1 + DECODED_HASH_SIZE + 4)
 			{
-				MoveMemory((PVOID)pbDecoded, (PCVOID)&pbDecoded[1], dwLen - 1);
-				dwLen -= 5;
-				Ok	   = TRUE;
+				CopyMemory((PVOID)pAddresses->bHash, (PCVOID)&bBuf[1], sizeof(pAddresses->bHash));
+				Ok = TRUE;
 			}
 		}
 		else if (Coin == C_ETH && StrCmpNIA(pAddress, "0x", lstrlenA("0x")) == 0)
 		{
-			if (dwLen == 42)
+			if (Len == 42)
 			{
-				if (Ok = HexToBinA(&pAddress[2], pbDecoded, dwSize))
-				{
-					dwLen = (dwLen - 2) / 2;
-				}
+				Ok = HexToBinA(&pAddress[2], pAddresses->bHash, ARRAYSIZE(pAddresses->bHash));
 			}
 		}
 	}
 
-	return Ok ? dwLen : 0;
+	return Ok;
 }
 
 // Передавать dwLines, чтобы каким-нибудь образом не прочитать больше, чем позволяет буфер.
-// Не забыть про ПРЕФИКС СЕТИ.
 // Returns TRUE if at least one line has been processed.
-static DWORD CopyAddresses(COIN Coin, PCSTR pData, PBYTE pbAddresses)
+static DWORD CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses)
 {
 	PCSTR pCRLF   = NULL;
 	CHAR  Address[64]; // !
-	BYTE  bDecoded[64]; // !
-	DWORD dwLen,
-		  dwCount = 0;
+	DWORD dwCount = 0;
 
 	do
 	{
@@ -294,11 +314,9 @@ static DWORD CopyAddresses(COIN Coin, PCSTR pData, PBYTE pbAddresses)
 		StringCchCopyNA(Address, ARRAYSIZE(Address), pData, pCRLF - pData);
 		StrTrimA(Address, " \t");
 
-		// На данный момент ВСЕГДА возвращается DECODED_HASH_SIZE (в таком случае можно просто возвращать BOOL).
-		if ((dwLen = DecodeAddress(Coin, Address, bDecoded, ARRAYSIZE(bDecoded))) == DECODED_HASH_SIZE)
+		if (DecodeAddress(Coin, Address, pAddresses))
 		{
-			CopyMemory((PVOID)pbAddresses, (PCVOID)bDecoded, dwLen);
-			pbAddresses += DECODED_HASH_SIZE;
+			++pAddresses;
 			++dwCount;
 		}
 
@@ -354,50 +372,51 @@ static DWORD CopyAddresses(COIN Coin, PCSTR pData, PBYTE pbAddresses)
 // There should be no empty spaces between addresses (reallocation is required).
 static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 {
-	PALGORITHM_DATA pAlgData	= NULL;
+	PALGORITHM_DATA pAlgData   = NULL;
 	SIZE_T			Size,
 					NewLines,
 					OldSize;
-	PBYTE			pbAddresses = NULL,
-					pbTmp		= NULL;
+	PADDRESS		pAddresses = NULL,
+					pTmp	   = NULL;
 
-	pAlgData = &g_AlgData[AlgorithmFromCoin(Coin)]; // Перенести ниже.
+	pAlgData = &g_AlgorithmData[AlgorithmFromCoin(Coin)]; // Обернуть в "if" либо перенести ниже (к месту использования).
 	Size	 = Lines * ADDRESS_SIZE;
 
-	if (pbAddresses = (PBYTE)HeapAlloc(GetProcessHeap(), 0, Size))
+	if (pAddresses = (PADDRESS)HeapAlloc(GetProcessHeap(), 0, Size))
 	{
-		if (NewLines = CopyAddresses(Coin, pData, pbAddresses))
+		if (NewLines = CopyAddresses(Coin, pData, pAddresses))
 		{
-			if (NewLines == Lines || (pbTmp = (PBYTE)HeapReAlloc(GetProcessHeap(), 0, (PVOID)pbAddresses, NewLines * ADDRESS_SIZE)))
+			if (NewLines == Lines || (pTmp = (PADDRESS)HeapReAlloc(GetProcessHeap(), 0, (PVOID)pAddresses, NewLines * ADDRESS_SIZE)))
 			{
-				if (pbTmp)
+				if (pTmp)
 				{
-					Size		= NewLines * ADDRESS_SIZE;
-					pbAddresses = pbTmp;
-					pbTmp		= NULL;
+					Size	   = NewLines * ADDRESS_SIZE;
+					pAddresses = pTmp;
+					pTmp	   = NULL;
 				}
 
 				OldSize = pAlgData->AddressCount * ADDRESS_SIZE;
 
-				if (pbTmp = pAlgData->pbAddresses ? (PBYTE)HeapReAlloc(GetProcessHeap(), 0, (PVOID)pAlgData->pbAddresses, OldSize + Size) : pbAddresses)
+				if (pTmp = pAlgData->pAddresses ? (PADDRESS)HeapReAlloc(GetProcessHeap(), 0, (PVOID)pAlgData->pAddresses, OldSize + Size) : pAddresses)
 				{
 					// If the memory has already been allocated.
-					if (pbTmp != pbAddresses)
+					if (pTmp != pAddresses)
 					{
-						CopyMemory((PVOID)&pbTmp[OldSize], (PCVOID)pbAddresses, Size);
+						CopyMemory((PVOID)&((PBYTE)pTmp)[OldSize], (PCVOID)pAddresses, Size);
+						//CopyMemory((PVOID)&pTmp[pAlgData->AddressCount], (PCVOID)pAddresses, Size);
 					}
 
+					pAlgData->pAddresses	= pTmp;
 					pAlgData->AddressCount += NewLines;
-					pAlgData->pbAddresses	= pbTmp;
-					pbTmp					= NULL;
+					pTmp					= NULL;
 
 					return pAlgData->AddressCount;
 				}
 			}
 		}
 
-		HeapFree(GetProcessHeap(), 0, (PVOID)pbAddresses);
-		pbAddresses = NULL;
+		HeapFree(GetProcessHeap(), 0, (PVOID)pAddresses);
+		pAddresses = NULL;
 	}
 
 	return 0;
@@ -440,7 +459,7 @@ static BOOL LoadAddresses(VOID)
 
 						if (pData = ReadFileData(Path, NULL))
 						{
-							if ((dwAllLines = CountLines(pData)) && (dwLoadedLines = ParseAddresses(Coin, pData, dwAllLines)))
+							if ((dwAllLines = CountLines(pData)) && (dwLoadedLines = (DWORD)ParseAddresses(Coin, pData, dwAllLines)))
 							{
 								wprintf(L"File %s loaded: %d/%d addresses.\n", FindData.cFileName, dwLoadedLines, dwAllLines);
 								++dwLoadedFiles;
@@ -483,23 +502,23 @@ static BOOL LoadAddresses(VOID)
 
 // Переименовать.
 // Попробовать вариант с inline и сравнить производительность.
-static VOID HashFromPublicKey(COIN Coin, PCBYTE pbPulicKey, DWORD dwSize, PBYTE pbHash)
+// pbHash должен быть как минимум 32 байта (sha256).
+static VOID HashFromPublicKey(ALGORITHM Algorithm, PCBYTE pbPulicKey, DWORD dwSize, PBYTE pbHash)
 {
-	switch (Coin)
+	switch (Algorithm)
 	{
-	case C_BTC:
-	case C_LTC:
+	case A_1:
 		// bHash = RIPEMD160(SHA256(bPubKey))
-		// Первые 20 байтов хэша.
+		// The first 20 bytes of the hash.
 
 		CryptSHA256(pbPulicKey, dwSize, pbHash);
 		CryptRIPEMD160(pbHash, HASH_256_SIZE, pbHash);
 
 		break;
 
-	case C_ETH:
+	case A_2:
 		// bHash = KECCAK256(bPubKey)
-		// Последние 20 байтов хэша. Последние 20 байтов переместить в начало.
+		// The last 20 bytes of the hash. They need to be moved to the beginning.
 
 		CryptKECCAK256(&pbPulicKey[1], dwSize - 1, pbHash);
 		MoveMemory((PVOID)pbHash, (PCVOID)&pbHash[HASH_256_SIZE - DECODED_HASH_SIZE], DECODED_HASH_SIZE);
@@ -508,7 +527,7 @@ static VOID HashFromPublicKey(COIN Coin, PCBYTE pbPulicKey, DWORD dwSize, PBYTE 
 	}
 }
 
-static VOID SavePrivateKey(COIN Coin, PCBYTE pbPrivateKey, DWORD dwSize)
+static VOID SavePrivateKey(PCADDRESS pAddress, PCBYTE pbPrivateKey, DWORD dwSize)
 {
 	DWORD i;
 	CHAR  Buf[256];
@@ -525,7 +544,7 @@ static VOID SavePrivateKey(COIN Coin, PCBYTE pbPrivateKey, DWORD dwSize)
 		StringCchPrintfA(Buf, ARRAYSIZE(Buf), "%s0x%02X", Buf, pbPrivateKey[i]);
 	}
 
-	wprintf(L"%s private key found: %S\n", g_pCoinSymbols[Coin - 1], Buf);
+	wprintf(L"%s private key found: %S\n", SymbolFromAddress(pAddress), Buf);
 }
 
 /*
@@ -546,8 +565,9 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 				  bHash[HASH_256_SIZE],
 				  bHashComp[HASH_256_SIZE];
 	EC_PUBLIC_KEY PubKey;
-	DWORD		  i,
-				  j;
+	ALGORITHM	  Alg;
+	DWORD		  i;
+	PCADDRESS	  pAddress = NULL;
 
 	if (pCtx = CryptECContextCreate(ECT_SECP256K1))
 	{
@@ -566,33 +586,37 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 					CryptECPublicKeyToBytes(pCtx, &PubKey, FALSE, bPubKey,	   sizeof(bPubKey));
 					CryptECPublicKeyToBytes(pCtx, &PubKey, TRUE,  bPubKeyComp, sizeof(bPubKeyComp));
 
-					for (i = 0; i < ARRAYSIZE(g_CoinData) && g_CoinData[i].Coin != C_INVALID; ++i)
+					for (Alg = A_1; Alg < A_COUNT; ++Alg)
 					{
-						switch (g_CoinData[i].Coin)
+						switch (Alg)
 						{
-						case C_BTC:
-						case C_LTC:
-							HashFromPublicKey(g_CoinData[i].Coin, bPubKey,	   sizeof(bPubKey),		bHash);
-							HashFromPublicKey(g_CoinData[i].Coin, bPubKeyComp, sizeof(bPubKeyComp), bHashComp);
+						case A_1:
+							HashFromPublicKey(Alg, bPubKey,		sizeof(bPubKey),	 bHash);
+							HashFromPublicKey(Alg, bPubKeyComp, sizeof(bPubKeyComp), bHashComp);
 
-							for (j = 0; j < g_CoinData[i].dwAddressCount; ++j)
+							for (i = 0; i < g_AlgorithmData[Alg].AddressCount; ++i)
 							{
-								if (memcmp((PCVOID)bHash,	  (PCVOID)&g_CoinData[i].pbAddresses[j * DECODED_HASH_SIZE], DECODED_HASH_SIZE) == 0 ||
-									memcmp((PCVOID)bHashComp, (PCVOID)&g_CoinData[i].pbAddresses[j * DECODED_HASH_SIZE], DECODED_HASH_SIZE) == 0)
+								pAddress = &g_AlgorithmData[Alg].pAddresses[i];
+
+								if (memcmp((PCVOID)bHash,	  (PCVOID)pAddress, DECODED_HASH_SIZE) == 0 ||
+									memcmp((PCVOID)bHashComp, (PCVOID)pAddress, DECODED_HASH_SIZE) == 0)
 								{
-									SavePrivateKey(g_CoinData[i].Coin, bPrivKey, sizeof(bPrivKey));
+									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}
 							}
 							break;
 
-						case C_ETH:
-							HashFromPublicKey(g_CoinData[i].Coin, bPubKey, sizeof(bPubKey), bHash);
+						case A_2:
+							HashFromPublicKey(Alg, bPubKey, sizeof(bPubKey), bHash);
 
-							for (j = 0; j < g_CoinData[i].dwAddressCount; ++j)
+							for (i = 0; i < g_AlgorithmData[Alg].AddressCount; ++i)
 							{
-								if (memcmp((PCVOID)bHash, (PCVOID)&g_CoinData[i].pbAddresses[j * DECODED_HASH_SIZE], DECODED_HASH_SIZE) == 0)
+								pAddress = &g_AlgorithmData[Alg].pAddresses[i];
+
+								// Попробовать сравнивать с отступом вместо предварительного перемещения в начало.
+								if (memcmp((PCVOID)bHash, (PCVOID)pAddress, DECODED_HASH_SIZE) == 0)
 								{
-									SavePrivateKey(g_CoinData[i].Coin, bPrivKey, sizeof(bPrivKey));
+									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}
 							}
 							break;
