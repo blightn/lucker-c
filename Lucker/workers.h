@@ -10,7 +10,7 @@
 #define NETWORK_PREFIX_SIZE_MIN 1
 #define NETWORK_PREFIX_SIZE_MAX	2
 #define DECODED_HASH_SIZE		20
-#define ADDRESS_SIZE			(NETWORK_PREFIX_SIZE_MAX + DECODED_HASH_SIZE)
+#define ADDRESS_SIZE			(NETWORK_PREFIX_SIZE_MAX + DECODED_HASH_SIZE) // Не используется.
 
 typedef enum {
 	A_1,	 // sha256 + ripemd160
@@ -56,15 +56,6 @@ typedef struct
 
 typedef const NETWORK_PREFIX* PCNETWORK_PREFIX;
 
-/*
-typedef struct
-{
-	COIN  Coin;
-	DWORD dwAddressCount;
-	PBYTE pbAddresses; // 20 bytes each.
-} COIN_DATA, *PCOIN_DATA;
-*/
-
 BOOL StartWorkers(DWORD dwCount);
 VOID StopWorkers(VOID);
 
@@ -91,9 +82,7 @@ static DWORD CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses);
 static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines);
 static BOOL LoadAddresses(VOID);
 
-//static VOID HashFromPublicKey(COIN Coin, PCBYTE pbPulicKey, DWORD dwSize, PBYTE pbHash);
 static VOID HashFromPublicKey(ALGORITHM Algorithm, PCBYTE pbPulicKey, DWORD dwSize, PBYTE pbHash);
-//static VOID SavePrivateKey(COIN Coin, PCBYTE pbPrivateKey, DWORD dwSize);
 static VOID SavePrivateKey(PCADDRESS pAddress, PCBYTE pbPrivateKey, DWORD dwSize);
 static DWORD WINAPI WorkerProc(PVOID pvParam);
 

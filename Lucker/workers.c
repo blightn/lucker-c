@@ -328,89 +328,49 @@ static DWORD CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses)
 }
 
 // There should be no empty spaces between addresses (reallocation is required).
-//static DWORD ParseAddresses(COIN Coin, PCSTR pData, DWORD dwLines)
-/*
-{
-	DWORD i;
-	PBYTE pbAddresses = NULL;
-
-	for (i = 0; i < ARRAYSIZE(g_CoinData) && g_CoinData[i].Coin != C_INVALID; ++i)
-	{
-		if (g_CoinData[i].Coin == Coin)
-			return 0;
-	}
-
-	if (i != ARRAYSIZE(g_CoinData))
-	{
-		g_CoinData[i].Coin = Coin;
-
-		if (g_CoinData[i].pbAddresses = (PBYTE)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, (SIZE_T)dwLines * DECODED_HASH_SIZE))
-		{
-			if (g_CoinData[i].dwAddressCount = CopyAddresses(Coin, pData, g_CoinData[i].pbAddresses))
-			{
-				if (g_CoinData[i].dwAddressCount != dwLines)
-				{
-					if (pbAddresses = (PBYTE)HeapReAlloc(GetProcessHeap(), 0, (PVOID)g_CoinData[i].pbAddresses, (SIZE_T)g_CoinData[i].dwAddressCount * DECODED_HASH_SIZE))
-					{
-						g_CoinData[i].pbAddresses = pbAddresses;
-					}
-				}
-
-				return g_CoinData[i].dwAddressCount;
-			}
-
-			HeapFree(GetProcessHeap(), 0, (PVOID)g_CoinData[i].pbAddresses);
-		}
-
-		ZeroMemory((PVOID)&g_CoinData[i], sizeof(g_CoinData[i]));
-	}
-
-	return 0;
-}
-*/
-
-// There should be no empty spaces between addresses (reallocation is required).
 static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 {
-	PALGORITHM_DATA pAlgData   = NULL;
 	SIZE_T			Size,
 					NewLines,
 					OldSize;
 	PADDRESS		pAddresses = NULL,
 					pTmp	   = NULL;
+	PALGORITHM_DATA pAlgData   = NULL;
 
-	pAlgData = &g_AlgorithmData[AlgorithmFromCoin(Coin)]; // ќбернуть в "if" либо перенести ниже (к месту использовани€).
-	Size	 = Lines * ADDRESS_SIZE;
+	Size = Lines * sizeof(ADDRESS);
 
-	if (pAddresses = (PADDRESS)HeapAlloc(GetProcessHeap(), 0, Size))
+	if (pAddresses = (PADDRESS)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, Size))
 	{
 		if (NewLines = CopyAddresses(Coin, pData, pAddresses))
 		{
-			if (NewLines == Lines || (pTmp = (PADDRESS)HeapReAlloc(GetProcessHeap(), 0, (PVOID)pAddresses, NewLines * ADDRESS_SIZE)))
+			if (NewLines == Lines || NewLines < Lines && (pTmp = (PADDRESS)HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, (PVOID)pAddresses, NewLines * sizeof(ADDRESS))))
 			{
 				if (pTmp)
 				{
-					Size	   = NewLines * ADDRESS_SIZE;
 					pAddresses = pTmp;
 					pTmp	   = NULL;
 				}
 
-				OldSize = pAlgData->AddressCount * ADDRESS_SIZE;
+				pAlgData = &g_AlgorithmData[AlgorithmFromCoin(Coin)];
+				OldSize  = pAlgData->AddressCount * sizeof(ADDRESS);
+				Size	 = NewLines				  * sizeof(ADDRESS);
 
-				if (pTmp = pAlgData->pAddresses ? (PADDRESS)HeapReAlloc(GetProcessHeap(), 0, (PVOID)pAlgData->pAddresses, OldSize + Size) : pAddresses)
+				if (pTmp = pAlgData->pAddresses ? (PADDRESS)HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, (PVOID)pAlgData->pAddresses, OldSize + Size) : pAddresses)
 				{
 					// If the memory has already been allocated.
 					if (pTmp != pAddresses)
 					{
-						CopyMemory((PVOID)&((PBYTE)pTmp)[OldSize], (PCVOID)pAddresses, Size);
-						//CopyMemory((PVOID)&pTmp[pAlgData->AddressCount], (PCVOID)pAddresses, Size);
+						CopyMemory((PVOID)&pTmp[pAlgData->AddressCount], (PCVOID)pAddresses, Size);
+
+						HeapFree(GetProcessHeap(), 0, (PVOID)pAddresses);
+						pAddresses = NULL;
 					}
 
 					pAlgData->pAddresses	= pTmp;
 					pAlgData->AddressCount += NewLines;
 					pTmp					= NULL;
 
-					return pAlgData->AddressCount;
+					return NewLines;
 				}
 			}
 		}
@@ -428,14 +388,14 @@ static BOOL LoadAddresses(VOID)
 {
 	WCHAR			 Path[MAX_PATH];
 	WIN32_FIND_DATAW FindData;
-	HANDLE			 hFind		   = INVALID_HANDLE_VALUE;
-	DWORD			 dwAllFiles	   = 0,
-					 dwAllLines,
-					 dwLoadedLines,
-					 dwLoadedFiles = 0;
+	HANDLE			 hFind		 = INVALID_HANDLE_VALUE;
+	SIZE_T			 AllFiles	 = 0,
+					 AllLines,
+					 LoadedLines,
+					 LoadedFiles = 0;
 	COIN			 Coin;
-	PSTR			 pData		   = NULL;
-	BOOL			 Ok			   = FALSE;
+	PSTR			 pData		 = NULL;
+	BOOL			 Ok			 = FALSE;
 
 	wprintf(L"\nLoading files with addresses...\n");
 
@@ -450,7 +410,7 @@ static BOOL LoadAddresses(VOID)
 			{
 				if (FindData.dwFileAttributes & ~FILE_ATTRIBUTE_DIRECTORY)
 				{
-					++dwAllFiles;
+					++AllFiles;
 
 					if ((Coin = CoinFromFileName(FindData.cFileName)) != C_INVALID)
 					{
@@ -459,10 +419,10 @@ static BOOL LoadAddresses(VOID)
 
 						if (pData = ReadFileData(Path, NULL))
 						{
-							if ((dwAllLines = CountLines(pData)) && (dwLoadedLines = (DWORD)ParseAddresses(Coin, pData, dwAllLines)))
+							if ((AllLines = CountLines(pData)) && (LoadedLines = ParseAddresses(Coin, pData, AllLines)))
 							{
-								wprintf(L"File %s loaded: %d/%d addresses.\n", FindData.cFileName, dwLoadedLines, dwAllLines);
-								++dwLoadedFiles;
+								wprintf(L"File %s loaded: %zu/%zu addresses.\n", FindData.cFileName, LoadedLines, AllLines);
+								++LoadedFiles;
 							}
 							else
 								wprintf(L"Can't parse loaded file: %s\n", FindData.cFileName);
@@ -479,12 +439,12 @@ static BOOL LoadAddresses(VOID)
 
 			} while (FindNextFileW(hFind, &FindData));
 
-			if (!dwAllFiles)
+			if (!AllFiles)
 			{
 				wprintf(L"There are no files in the " DATA_FOLDER L" folder.\n");
 			}
 
-			Ok = GetLastError() == ERROR_NO_MORE_FILES && dwLoadedFiles /*&& dwAllFiles == dwLoadedFiles*/;
+			Ok = GetLastError() == ERROR_NO_MORE_FILES && LoadedFiles /*&& AllFiles == LoadedFiles*/;
 
 			FindClose(hFind);
 			hFind = INVALID_HANDLE_VALUE;
@@ -495,7 +455,7 @@ static BOOL LoadAddresses(VOID)
 	else
 		wprintf(L"Can't get path to " DATA_FOLDER L" folder.\n");
 
-	wprintf(L"%d/%d files loaded.\n\n", dwLoadedFiles, dwAllFiles);
+	wprintf(L"%zu/%zu files loaded.\n\n", LoadedFiles, AllFiles);
 
 	return Ok;
 }
@@ -598,12 +558,23 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 							{
 								pAddress = &g_AlgorithmData[Alg].pAddresses[i];
 
-								if (memcmp((PCVOID)bHash,	  (PCVOID)pAddress, DECODED_HASH_SIZE) == 0 ||
-									memcmp((PCVOID)bHashComp, (PCVOID)pAddress, DECODED_HASH_SIZE) == 0)
+								if (memcmp((PCVOID)bHash,	  (PCVOID)pAddress, RTL_FIELD_SIZE(ADDRESS, bHash)) == 0 ||
+									memcmp((PCVOID)bHashComp, (PCVOID)pAddress, RTL_FIELD_SIZE(ADDRESS, bHash)) == 0)
 								{
 									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}
 							}
+
+							/*
+							for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
+							{
+								if (memcmp((PCVOID)bHash,	  (PCVOID)pAddress, RTL_FIELD_SIZE(ADDRESS, bHash)) == 0 ||
+									memcmp((PCVOID)bHashComp, (PCVOID)pAddress, RTL_FIELD_SIZE(ADDRESS, bHash)) == 0)
+								{
+									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
+								}
+							}
+							*/
 							break;
 
 						case A_2:
@@ -614,83 +585,24 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 								pAddress = &g_AlgorithmData[Alg].pAddresses[i];
 
 								// ѕопробовать сравнивать с отступом вместо предварительного перемещени€ в начало.
-								if (memcmp((PCVOID)bHash, (PCVOID)pAddress, DECODED_HASH_SIZE) == 0)
+								if (memcmp((PCVOID)bHash, (PCVOID)pAddress, RTL_FIELD_SIZE(ADDRESS, bHash)) == 0)
 								{
 									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}
 							}
+
+							/*
+							for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
+							{
+								// ѕопробовать сравнивать с отступом вместо предварительного перемещени€ в начало.
+								if (memcmp((PCVOID)bHash, (PCVOID)pAddress, RTL_FIELD_SIZE(ADDRESS, bHash)) == 0)
+								{
+									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
+								}
+							}
+							*/
 							break;
 						}
-
-						/*/
-						{
-							// Private key:	5500a1ff8378cc2c257bcd6d3d0186ac9fb9d226154f793f7bcb892efb34ebc7
-							//
-							// BTC:			00124ef5260c450375a9b56c3df7df7550830530c518610791, 0076b4e6afe774090703659ee017b08ad2e0ad6a118d73bb4e
-							// LTC:			30124ef5260c450375a9b56c3df7df7550830530c5ab3a8537, 3076b4e6afe774090703659ee017b08ad2e0ad6a115795e448
-							//
-							// BTC:			12fokXPiUNSVvab6gxGo7Zgni2VYZS8A4x,					1BpfSsF8nQGk2718jnnrC811XxDvoqqJBf
-							// ETH:			0x38e73420d07d32c789b4349988fd67a667a61892,			0x71322a0db59f5d49a04970ad26ffff00b23fe90e
-							// LTC:			LLtm1jhYZ2gZBPHFs6G6PakYvErpkRqPTU,					LW3ci5Yxs4WoGuhHuvn9U94mkAbCuhyRe7
-
-							CHAR PrivateKey[65],
-								Address1[128],
-								Address2[128];
-							DWORD k;
-							BYTE bTmp1[32],
-								bTmp2[32];
-
-							PrivateKey[0] = Address1[0] = Address2[0] = '\0';
-
-							for (k = 0; k < sizeof(bPrivKey); ++k)
-							{
-								StringCchPrintfA(PrivateKey, ARRAYSIZE(PrivateKey), "%s%02x", PrivateKey, bPrivKey[k]);
-							}
-
-							switch (g_CoinData[i].Coin)
-							{
-							case C_BTC:
-							case C_LTC:
-								MoveMemory((PVOID)&bHash[1],	 (PCVOID)bHash,		DECODED_ADDRESS_SIZE);
-								MoveMemory((PVOID)&bHashComp[1], (PCVOID)bHashComp, DECODED_ADDRESS_SIZE);
-
-								bHash[0] = bHashComp[0] = g_CoinData[i].Coin == C_BTC ? 0x00 : 0x30;
-
-								CryptSHA256(bHash,	   1 + DECODED_ADDRESS_SIZE, bTmp1);
-								CryptSHA256(bHashComp, 1 + DECODED_ADDRESS_SIZE, bTmp2);
-
-								CryptSHA256(bTmp1, HASH_256_SIZE, bTmp1);
-								CryptSHA256(bTmp2, HASH_256_SIZE, bTmp2);
-
-								CopyMemory((PVOID)&bHash	[1 + DECODED_ADDRESS_SIZE],	(PCVOID)bTmp1, 4);
-								CopyMemory((PVOID)&bHashComp[1 + DECODED_ADDRESS_SIZE], (PCVOID)bTmp2, 4);
-
-								// ƒл€ удобства конвертировани€ в Base58 - https://appdevtools.com/base58-encoder-decoder
-								for (k = 0; k < 1 + DECODED_ADDRESS_SIZE + 4; ++k)
-								{
-									StringCchPrintfA(Address1, ARRAYSIZE(Address1), "%s%02x", Address1, bHash[k]);
-									StringCchPrintfA(Address2, ARRAYSIZE(Address2), "%s%02x", Address2, bHashComp[k]);
-								}
-
-								StringCchCopyA(Address1, ARRAYSIZE(Address1), "12fokXPiUNSVvab6gxGo7Zgni2VYZS8A4x"); // Base58.
-								StringCchCopyA(Address2, ARRAYSIZE(Address2), "1BpfSsF8nQGk2718jnnrC811XxDvoqqJBf"); // Base58.
-								break;
-
-							case C_ETH:
-								StringCchCopyA(Address1, ARRAYSIZE(Address1), "0x");
-								StringCchCopyA(Address2, ARRAYSIZE(Address2), "0x");
-
-								for (k = 0; k < DECODED_ADDRESS_SIZE; ++k)
-								{
-									StringCchPrintfA(Address1, ARRAYSIZE(Address1), "%s%02x", Address1, bHash[k]);
-									StringCchPrintfA(Address2, ARRAYSIZE(Address2), "%s%02x", Address2, bHashComp[k]);
-								}
-								break;
-							}
-
-							Sleep(0);
-						}
-						//*/
 					}
 				}
 			}
