@@ -131,24 +131,41 @@ static BOOL GetDataPath(PWSTR pPath, DWORD dwSize)
 	return Ok;
 }
 
-static PSTR ReadFileData(PCWSTR pPath, PDWORD pdwSize)
+// TODO: MMF.
+static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize)
 {
-	HANDLE hFile  = INVALID_HANDLE_VALUE;
-	DWORD  dwSize,
-		   dwRead = 0;
-	PSTR   pData  = NULL;
+	HANDLE		  hFile  = INVALID_HANDLE_VALUE;
+	LARGE_INTEGER liSize,
+				  liTmp;
+	PSTR		  pData  = NULL,
+				  pTmp	 = NULL;
+	DWORD		  dwRead = 0;
 
-	if ((hFile = CreateFileW(pPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL)) != INVALID_HANDLE_VALUE)
+	if ((hFile = CreateFileW(pPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL)) != INVALID_HANDLE_VALUE)
 	{
-		if ((dwSize = GetFileSize(hFile, NULL)) != INVALID_FILE_SIZE && dwSize)
+		if (GetFileSizeEx(hFile, &liSize) && liSize.QuadPart)
 		{
-			if (pData = (PBYTE)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, (SIZE_T)dwSize + 1))
+			if (pData = (PBYTE)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, liSize.QuadPart + 1)) // +1 for '\0'.
 			{
-				if (ReadFile(hFile, (PVOID)pData, dwSize, &dwRead, NULL) && dwRead == dwSize)
+				pTmp  = pData;
+				liTmp = liSize;
+
+				while (liTmp.QuadPart > 0)
 				{
-					if (pdwSize)
+					dwRead = 0;
+
+					if (!ReadFile(hFile, (PVOID)pTmp, liTmp.LowPart ? liTmp.LowPart : MAXDWORD, &dwRead, NULL) || dwRead == 0)
+						break;
+
+					pTmp		   += dwRead;
+					liTmp.QuadPart -= dwRead;
+				}
+
+				if (liTmp.QuadPart == 0 && dwRead)
+				{
+					if (pSize)
 					{
-						*pdwSize = dwSize + 1;
+						*pSize = liSize.QuadPart + 1;
 					}
 				}
 				else
@@ -166,18 +183,18 @@ static PSTR ReadFileData(PCWSTR pPath, PDWORD pdwSize)
 	return pData;
 }
 
-static DWORD CountLines(PCSTR pData)
+static SIZE_T CountLines(PCSTR pData)
 {
-	PCSTR pLine   = pData;
-	DWORD dwLines = 0;
+	PCSTR  pLine = pData;
+	SIZE_T Lines = 0;
 
 	while (pLine = StrStrA(pLine, "\r\n"))
 	{
 		pLine += lstrlenA("\r\n");
-		++dwLines;
+		++Lines;
 	}
 
-	return dwLines;
+	return Lines;
 }
 
 static BOOL HexToBin(BYTE bHex, PBYTE pbOut)
@@ -300,11 +317,11 @@ static BOOL DecodeAddress(COIN Coin, PCSTR pAddress, PADDRESS pAddresses)
 
 // Передавать dwLines, чтобы каким-нибудь образом не прочитать больше, чем позволяет буфер.
 // Returns TRUE if at least one line has been processed.
-static DWORD CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses)
+static SIZE_T CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses)
 {
-	PCSTR pCRLF   = NULL;
-	CHAR  Address[64]; // !
-	DWORD dwCount = 0;
+	PCSTR  pCRLF = NULL;
+	CHAR   Address[64]; // !
+	SIZE_T Count = 0;
 
 	do
 	{
@@ -317,17 +334,18 @@ static DWORD CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses)
 		if (DecodeAddress(Coin, Address, pAddresses))
 		{
 			++pAddresses;
-			++dwCount;
+			++Count;
 		}
 
 		pData = pCRLF + lstrlenA("\r\n");
 
 	} while (*pData);
 
-	return dwCount;
+	return Count;
 }
 
 // There should be no empty spaces between addresses (reallocation is required).
+// TODO: MMF.
 static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 {
 	SIZE_T			Size,
@@ -384,6 +402,7 @@ static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 
 // Файлы должны быть в Ansi с .txt и '\r\n' (обязательно в конце).
 // Skips blank lines.
+// TODO: MMF.
 static BOOL LoadAddresses(VOID)
 {
 	WCHAR			 Path[MAX_PATH];

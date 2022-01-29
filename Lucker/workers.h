@@ -52,7 +52,7 @@ typedef struct
 {
 	BYTE  bPrefix[NETWORK_PREFIX_SIZE_MAX];
 	DWORD dwPrefixSize;
-} NETWORK_PREFIX/*, *PNETWORK_PREFIX*/;
+} NETWORK_PREFIX;
 
 typedef const NETWORK_PREFIX* PCNETWORK_PREFIX;
 
@@ -62,8 +62,8 @@ VOID StopWorkers(VOID);
 DWORD64 GetCycleCount(VOID);
 
 static BOOL GetDataPath(PWSTR pPath, DWORD dwSize);
-static PSTR ReadFileData(PCWSTR pPath, PDWORD pdwSize);
-static DWORD CountLines(PCSTR pData);
+static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize);
+static SIZE_T CountLines(PCSTR pData);
 
 static BOOL HexToBin(BYTE bHex, PBYTE pbOut);
 static BOOL HexToBinA(PCSTR pHex, PBYTE pbBuf, DWORD dwSize);
@@ -78,7 +78,7 @@ static PCWSTR SymbolFromAddress(PCADDRESS pAddress);
 static PCNETWORK_PREFIX NetworkPrefixFromCoin(COIN Coin); // Не используется.
 
 static BOOL DecodeAddress(COIN Coin, PCSTR pAddress, PADDRESS pAddresses);
-static DWORD CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses);
+static SIZE_T CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses);
 static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines);
 static BOOL LoadAddresses(VOID);
 
