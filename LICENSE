@@ -148,7 +148,10 @@ OpenSSL License:
  * [including the GNU Public Licence.]
  */
  
- 
+
+libsecp256k1 License:
+----------------
+
 Copyright (c) 2013 Pieter Wuille
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
