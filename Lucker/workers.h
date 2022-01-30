@@ -10,7 +10,6 @@
 #define NETWORK_PREFIX_SIZE_MIN 1
 #define NETWORK_PREFIX_SIZE_MAX	2
 #define DECODED_HASH_SIZE		20
-#define ADDRESS_SIZE			(NETWORK_PREFIX_SIZE_MAX + DECODED_HASH_SIZE) // Не используется.
 
 typedef enum {
 	A_1,	 // sha256 + ripemd160

@@ -1,8 +1,0 @@
-Package: secp256k1
-Version: 2017-19-10
-Port-Version: 4
-Architecture: x64-windows-static
-Multi-Arch: same
-Abi: 8a33944e8b6f8d8a6419f0a6b6991eed681b25586e854dd7a9ff2ae89027cab7
-Description: Optimized C library for EC operations on curve
-Type: Port

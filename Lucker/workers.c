@@ -145,7 +145,7 @@ static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize)
 	{
 		if (GetFileSizeEx(hFile, &liSize) && liSize.QuadPart)
 		{
-			if (pData = (PBYTE)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, liSize.QuadPart + 1)) // +1 for '\0'.
+			if (pData = (PSTR)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, liSize.QuadPart + 1)) // +1 for '\0'.
 			{
 				pTmp  = pData;
 				liTmp = liSize;
@@ -154,14 +154,14 @@ static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize)
 				{
 					dwRead = 0;
 
-					if (!ReadFile(hFile, (PVOID)pTmp, liTmp.LowPart ? liTmp.LowPart : MAXDWORD, &dwRead, NULL) || dwRead == 0)
+					if (!ReadFile(hFile, (PVOID)pTmp, liTmp.LowPart ? liTmp.LowPart : MAXDWORD, &dwRead, NULL) || !dwRead)
 						break;
 
 					pTmp		   += dwRead;
 					liTmp.QuadPart -= dwRead;
 				}
 
-				if (liTmp.QuadPart == 0 && dwRead)
+				if (!liTmp.QuadPart && dwRead)
 				{
 					if (pSize)
 					{
@@ -246,7 +246,7 @@ static COIN CoinFromFileName(PCWSTR pFileName)
 
 	for (i = 0; i < ARRAYSIZE(g_CoinSymbols); ++i)
 	{
-		if (StrCmpNIW(pFileName, g_CoinSymbols[i].pSymbol, lstrlenW(g_CoinSymbols[i].pSymbol)) == 0)
+		if (!StrCmpNIW(pFileName, g_CoinSymbols[i].pSymbol, lstrlenW(g_CoinSymbols[i].pSymbol)))
 			return g_CoinSymbols[i].Coin;
 	}
 
@@ -284,7 +284,6 @@ static PCNETWORK_PREFIX NetworkPrefixFromCoin(COIN Coin)
 }
 
 // ¬алидацию и декодирование адреса можно вынести в отдельные ф-ии (на каждую монету).
-// Coin можно достать из адреса.
 static BOOL DecodeAddress(COIN Coin, PCSTR pAddress, PADDRESS pAddresses)
 {
 	SIZE_T Len;
@@ -303,7 +302,7 @@ static BOOL DecodeAddress(COIN Coin, PCSTR pAddress, PADDRESS pAddresses)
 				Ok = TRUE;
 			}
 		}
-		else if (Coin == C_ETH && StrCmpNIA(pAddress, "0x", lstrlenA("0x")) == 0)
+		else if (Coin == C_ETH && !StrCmpNIA(pAddress, "0x", lstrlenA("0x")))
 		{
 			if (Len == 42)
 			{
@@ -336,6 +335,8 @@ static SIZE_T CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses)
 			++pAddresses;
 			++Count;
 		}
+		else
+			wprintf(L"Invalid address: %S\n", Address);
 
 		pData = pCRLF + lstrlenA("\r\n");
 
@@ -433,6 +434,8 @@ static BOOL LoadAddresses(VOID)
 
 					if ((Coin = CoinFromFileName(FindData.cFileName)) != C_INVALID)
 					{
+						wprintf(L"Loading file %s...\n", FindData.cFileName);
+
 						PathRemoveFileSpecW(Path);
 						StringCchPrintfW(Path, ARRAYSIZE(Path), L"%s\\%s", Path, FindData.cFileName);
 
@@ -444,7 +447,7 @@ static BOOL LoadAddresses(VOID)
 								++LoadedFiles;
 							}
 							else
-								wprintf(L"Can't parse loaded file: %s\n", FindData.cFileName);
+								wprintf(L"Can't load file: %s\n", FindData.cFileName);
 
 							HeapFree(GetProcessHeap(), 0, (PVOID)pData);
 							pData = NULL;
@@ -463,7 +466,7 @@ static BOOL LoadAddresses(VOID)
 				wprintf(L"There are no files in the " DATA_FOLDER L" folder.\n");
 			}
 
-			Ok = GetLastError() == ERROR_NO_MORE_FILES && LoadedFiles /*&& AllFiles == LoadedFiles*/;
+			Ok = GetLastError() == ERROR_NO_MORE_FILES && LoadedFiles;
 
 			FindClose(hFind);
 			hFind = INVALID_HANDLE_VALUE;
@@ -479,29 +482,22 @@ static BOOL LoadAddresses(VOID)
 	return Ok;
 }
 
-// ѕереименовать.
 // ѕопробовать вариант с inline и сравнить производительность.
-// pbHash должен быть как минимум 32 байта (sha256).
+// pbHash size must be at least 32 bytes (sha256).
 static VOID HashFromPublicKey(ALGORITHM Algorithm, PCBYTE pbPulicKey, DWORD dwSize, PBYTE pbHash)
 {
 	switch (Algorithm)
 	{
 	case A_1:
-		// bHash = RIPEMD160(SHA256(bPubKey))
-		// The first 20 bytes of the hash.
-
+		// The first 20 bytes of RIPEMD160(SHA256(bPubKey)).
 		CryptSHA256(pbPulicKey, dwSize, pbHash);
 		CryptRIPEMD160(pbHash, HASH_256_SIZE, pbHash);
-
 		break;
 
 	case A_2:
-		// bHash = KECCAK256(bPubKey)
-		// The last 20 bytes of the hash. They need to be moved to the beginning.
-
+		// The last 20 bytes of KECCAK256(bPubKey). They need to be moved to the beginning.
 		CryptKECCAK256(&pbPulicKey[1], dwSize - 1, pbHash);
 		MoveMemory((PVOID)pbHash, (PCVOID)&pbHash[HASH_256_SIZE - DECODED_HASH_SIZE], DECODED_HASH_SIZE);
-
 		break;
 	}
 }
@@ -552,14 +548,11 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 	{
 		while (WaitForSingleObject(g_hStopEvent, 0) == WAIT_TIMEOUT)
 		{
-			// We randomize all 32 bits without checking the range, because the chance of getting a zero or
+			// We randomize all 32 bytes without checking the range, because the chance of getting a zero or
 			// a value greater than 0xFFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFE BAAE DCE6 AF48 A03B BFD2 5E8C D036 4140
-			// is very small, but much more than the chance of getting a non-empty address ;)
+			// is very small, but much more than a chance to get the right address ;)
 			if (CryptRandom(bPrivKey, sizeof(bPrivKey)))
 			{
-				// 5500a1ff8378cc2c257bcd6d3d0186ac9fb9d226154f793f7bcb892efb34ebc7
-				//CopyMemory((PVOID)bPrivKey, (PCVOID)"\x55\x00\xa1\xff\x83\x78\xcc\x2c\x25\x7b\xcd\x6d\x3d\x01\x86\xac\x9f\xb9\xd2\x26\x15\x4f\x79\x3f\x7b\xcb\x89\x2e\xfb\x34\xeb\xc7", 32); // For debug
-
 				if (CryptECPublicKeyFromSecret(pCtx, bPrivKey, &PubKey))
 				{
 					CryptECPublicKeyToBytes(pCtx, &PubKey, FALSE, bPubKey,	   sizeof(bPubKey));
@@ -577,8 +570,8 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 							{
 								pAddress = &g_AlgorithmData[Alg].pAddresses[i];
 
-								if (memcmp((PCVOID)bHash,	  (PCVOID)pAddress, RTL_FIELD_SIZE(ADDRESS, bHash)) == 0 ||
-									memcmp((PCVOID)bHashComp, (PCVOID)pAddress, RTL_FIELD_SIZE(ADDRESS, bHash)) == 0)
+								if (!memcmp((PCVOID)bHash,	   (PCVOID)pAddress->bHash, RTL_FIELD_SIZE(ADDRESS, bHash)) ||
+									!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, RTL_FIELD_SIZE(ADDRESS, bHash)))
 								{
 									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}
@@ -587,8 +580,8 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 							/*
 							for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
 							{
-								if (memcmp((PCVOID)bHash,	  (PCVOID)pAddress, RTL_FIELD_SIZE(ADDRESS, bHash)) == 0 ||
-									memcmp((PCVOID)bHashComp, (PCVOID)pAddress, RTL_FIELD_SIZE(ADDRESS, bHash)) == 0)
+								if (!memcmp((PCVOID)bHash,	   (PCVOID)pAddress->bHash, RTL_FIELD_SIZE(ADDRESS, bHash)) ||
+									!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, RTL_FIELD_SIZE(ADDRESS, bHash)))
 								{
 									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}
@@ -604,7 +597,7 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 								pAddress = &g_AlgorithmData[Alg].pAddresses[i];
 
 								// ѕопробовать сравнивать с отступом вместо предварительного перемещени€ в начало.
-								if (memcmp((PCVOID)bHash, (PCVOID)pAddress, RTL_FIELD_SIZE(ADDRESS, bHash)) == 0)
+								if (!memcmp((PCVOID)bHash, (PCVOID)pAddress->bHash, RTL_FIELD_SIZE(ADDRESS, bHash)))
 								{
 									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}
@@ -614,7 +607,7 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 							for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
 							{
 								// ѕопробовать сравнивать с отступом вместо предварительного перемещени€ в начало.
-								if (memcmp((PCVOID)bHash, (PCVOID)pAddress, RTL_FIELD_SIZE(ADDRESS, bHash)) == 0)
+								if (!memcmp((PCVOID)bHash, (PCVOID)pAddress->bHash, RTL_FIELD_SIZE(ADDRESS, bHash)))
 								{
 									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}
