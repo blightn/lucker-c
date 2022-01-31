@@ -570,8 +570,8 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 							{
 								pAddress = &g_AlgorithmData[Alg].pAddresses[i];
 
-								if (!memcmp((PCVOID)bHash,	   (PCVOID)pAddress->bHash, RTL_FIELD_SIZE(ADDRESS, bHash)) ||
-									!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, RTL_FIELD_SIZE(ADDRESS, bHash)))
+								if (!memcmp((PCVOID)bHash,	   (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)) ||
+									!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
 								{
 									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}
@@ -580,8 +580,8 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 							/*
 							for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
 							{
-								if (!memcmp((PCVOID)bHash,	   (PCVOID)pAddress->bHash, RTL_FIELD_SIZE(ADDRESS, bHash)) ||
-									!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, RTL_FIELD_SIZE(ADDRESS, bHash)))
+								if (!memcmp((PCVOID)bHash,	   (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)) ||
+									!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
 								{
 									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}
@@ -597,7 +597,7 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 								pAddress = &g_AlgorithmData[Alg].pAddresses[i];
 
 								// ѕопробовать сравнивать с отступом вместо предварительного перемещени€ в начало.
-								if (!memcmp((PCVOID)bHash, (PCVOID)pAddress->bHash, RTL_FIELD_SIZE(ADDRESS, bHash)))
+								if (!memcmp((PCVOID)bHash, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
 								{
 									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}
@@ -607,7 +607,7 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 							for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
 							{
 								// ѕопробовать сравнивать с отступом вместо предварительного перемещени€ в начало.
-								if (!memcmp((PCVOID)bHash, (PCVOID)pAddress->bHash, RTL_FIELD_SIZE(ADDRESS, bHash)))
+								if (!memcmp((PCVOID)bHash, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
 								{
 									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}

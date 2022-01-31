@@ -26,29 +26,25 @@ typedef enum {
 	C_INVALID,
 } COIN;
 
-typedef struct
-{
+typedef struct {
 	COIN Coin;
 	BYTE bHash[DECODED_HASH_SIZE]; // Создать тип.
 } ADDRESS, *PADDRESS;
 
 typedef const ADDRESS* PCADDRESS;
 
-typedef struct
-{
+typedef struct {
 	PADDRESS pAddresses;
 	SIZE_T	 AddressCount;
 } ALGORITHM_DATA, *PALGORITHM_DATA;
 
-typedef struct
-{
+typedef struct {
 	COIN   Coin;
 	PCWSTR pSymbol;
 } COIN_SYMBOL;
 
 // Не используется.
-typedef struct
-{
+typedef struct {
 	BYTE  bPrefix[NETWORK_PREFIX_SIZE_MAX];
 	DWORD dwPrefixSize;
 } NETWORK_PREFIX;

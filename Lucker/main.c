@@ -153,8 +153,6 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 					// Проверить с "Sleep(1000)" корректность подсчёта.
 				}
 
-				//StopWorkers();
-
 				if (qwCycles)
 				{
 					wprintf(L"\n");
