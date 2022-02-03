@@ -12,8 +12,8 @@
 #define DECODED_HASH_SIZE		20
 
 typedef enum {
-	A_1,	 // sha256 + ripemd160
-	A_2,	 // keccak256
+	A_1,	 // sha256 + ripemd160 (BTC, LTC, etc.)
+	A_2,	 // keccak256 (ETH)
 	A_COUNT, // Number of algorithms.
 	A_INVALID,
 } ALGORITHM;

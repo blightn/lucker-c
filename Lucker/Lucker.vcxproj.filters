@@ -18,9 +18,6 @@
     <ClCompile Include="main.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
-    <ClCompile Include="workers.c">
-      <Filter>Исходные файлы</Filter>
-    </ClCompile>
     <ClCompile Include="base58.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
@@ -30,12 +27,15 @@
     <ClCompile Include="..\Libs\SHA3IUF\sha3.c">
       <Filter>Исходные файлы</Filter>
     </ClCompile>
+    <ClCompile Include="flags.c">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
+    <ClCompile Include="workers.c">
+      <Filter>Исходные файлы</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="defines.h">
-      <Filter>Файлы заголовков</Filter>
-    </ClInclude>
-    <ClInclude Include="workers.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="main.h">
@@ -48,6 +48,12 @@
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
     <ClInclude Include="..\Libs\SHA3IUF\sha3.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="flags.h">
+      <Filter>Файлы заголовков</Filter>
+    </ClInclude>
+    <ClInclude Include="workers.h">
       <Filter>Файлы заголовков</Filter>
     </ClInclude>
   </ItemGroup>

@@ -95,52 +95,51 @@ static BOOL IsSMTEnabled(PBOOL pEnabled)
 
 INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 {
-	SYSTEM_INFO SysInfo;
-	BOOL		SMT		  = FALSE;
-	DWORD		dwWorkers = 0;
-	DWORD64		qwCycles  = 0;
+	PCCOMMAND_LINE_FLAG pFlags	 = NULL;
+	SYSTEM_INFO			SysInfo;
+	BOOL				SMT		 = FALSE;
+	DWORD				dwWorkers;
+	DWORD64				qwCycles = 0;
 
-	// To prevent cyclical restarts, the system will only restart the application if it has been running for a minimum of 60 seconds.
-	RegisterApplicationRestart(Argc == 2 ? pArgv[1] : NULL, 0);
-	RegisterApplicationRecoveryCallback((APPLICATION_RECOVERY_CALLBACK)ApplicationRecoveryCallback, NULL, RECOVERY_DEFAULT_PING_INTERVAL, 0);
+	if (!(pFlags = FlagsParse(Argc, pArgv, NULL)))
+	{
+		FlagsPrintUsage();
+		wprintf(L"The auto configuring mode selected.\n\n");
+
+		pFlags = FlagsGetDefaults(NULL);
+	}
 
 	GetNativeSystemInfo(&SysInfo);
 	IsSMTEnabled(&SMT);
 
-	if (Argc == 1)
-	{
-		wprintf(L"The auto configuring mode selected. You can also enter the number of workers (threads) to use via the command line: prog.exe [1 <= workers <= %u]\n", SysInfo.dwNumberOfProcessors);
-		dwWorkers = SysInfo.dwNumberOfProcessors;
-
-		if (SMT)
-		{
-			dwWorkers /= 2; // Сравнить.
-		}
-	}
-	else if (Argc == 2 && StrToIntExW(pArgv[1], STIF_DEFAULT, (PINT)&dwWorkers) && dwWorkers)
-	{
-		dwWorkers = min(dwWorkers, SysInfo.dwNumberOfProcessors);
-	}
-	else
-		wprintf(L"Improper usage. Options:\n\t1. prog.exe\n\t2: prog.exe [1 <= workers <= %u]\n", SysInfo.dwNumberOfProcessors);
-
-	wprintf(L"\n");
-
 	if (SMT)
 	{
-		wprintf(L"NOTE: Simultaneous multithreading (SMT) is enabled. This means that you have half as many physical processors as logical ones.\n");
+		wprintf(L"NOTE: Simultaneous multithreading (SMT) is enabled. This means that you have half as many physical processors as logical ones.\n\n");
+		SysInfo.dwNumberOfProcessors /= 2; // Сравнить "С" и "БЕЗ".
 	}
+
+	if (pFlags[FT_WORKERS].Value == 0)
+	{
+		dwWorkers = SysInfo.dwNumberOfProcessors;
+	}
+	else
+		dwWorkers = min((DWORD)pFlags[FT_WORKERS].Value, SysInfo.dwNumberOfProcessors);
 
 #ifdef _DEBUG
 	dwWorkers = 1; // !
 #endif
 
+	wprintf(L"Workers:\t%u/%u\nCoordinates:\t%d\nBind to cores:\t%s\n\n", dwWorkers, SysInfo.dwNumberOfProcessors,
+		pFlags[FT_COORDINATES].Value, pFlags[FT_BIND_WORKERS].Value ? L"yes" : L"no");
+
+	// To prevent cyclical restarts, the system will only restart the application if it has been running for a minimum of 60 seconds.
+	RegisterApplicationRestart(Argc == 2 ? pArgv[1] : NULL, 0);
+	RegisterApplicationRecoveryCallback((APPLICATION_RECOVERY_CALLBACK)ApplicationRecoveryCallback, NULL, RECOVERY_DEFAULT_PING_INTERVAL, 0);
+
 	if (dwWorkers)
 	{
 		if (g_hStopEvent = CreateEventW(NULL, TRUE, FALSE, NULL))
 		{
-			wprintf(L"%u/%u workers (threads) will be used.\n", dwWorkers, SysInfo.dwNumberOfProcessors);
-
 			if (StartWorkers(dwWorkers))
 			{
 				SetConsoleCtrlHandler((PHANDLER_ROUTINE)HandlerRoutine, TRUE);

@@ -324,6 +324,7 @@
     <ClCompile Include="..\Libs\SHA3IUF\sha3.c" />
     <ClCompile Include="base58.c" />
     <ClCompile Include="crypt.c" />
+    <ClCompile Include="flags.c" />
     <ClCompile Include="main.c" />
     <ClCompile Include="workers.c" />
   </ItemGroup>
@@ -332,6 +333,7 @@
     <ClInclude Include="base58.h" />
     <ClInclude Include="crypt.h" />
     <ClInclude Include="defines.h" />
+    <ClInclude Include="flags.h" />
     <ClInclude Include="main.h" />
     <ClInclude Include="workers.h" />
   </ItemGroup>

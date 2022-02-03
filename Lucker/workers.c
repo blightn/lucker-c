@@ -143,9 +143,13 @@ static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize)
 
 	if ((hFile = CreateFileW(pPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL)) != INVALID_HANDLE_VALUE)
 	{
-		if (GetFileSizeEx(hFile, &liSize) && liSize.QuadPart)
+#ifdef _WIN64
+		if (GetFileSizeEx(hFile, &liSize) && liSize.QuadPart && liSize.QuadPart < MAXDWORD64)
+#else
+		if (GetFileSizeEx(hFile, &liSize) && liSize.QuadPart && !liSize.HighPart && liSize.LowPart < MAXDWORD)
+#endif
 		{
-			if (pData = (PSTR)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, liSize.QuadPart + 1)) // +1 for '\0'.
+			if (pData = (PSTR)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, (SIZE_T)liSize.QuadPart + 1)) // +1 for '\0'.
 			{
 				pTmp  = pData;
 				liTmp = liSize;
@@ -165,7 +169,7 @@ static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize)
 				{
 					if (pSize)
 					{
-						*pSize = liSize.QuadPart + 1;
+						*pSize = (SIZE_T)liSize.QuadPart + 1;
 					}
 				}
 				else
@@ -314,7 +318,6 @@ static BOOL DecodeAddress(COIN Coin, PCSTR pAddress, PADDRESS pAddresses)
 	return Ok;
 }
 
-// Передавать dwLines, чтобы каким-нибудь образом не прочитать больше, чем позволяет буфер.
 // Returns TRUE if at least one line has been processed.
 static SIZE_T CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses)
 {
@@ -346,7 +349,6 @@ static SIZE_T CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses)
 }
 
 // There should be no empty spaces between addresses (reallocation is required).
-// TODO: MMF.
 static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 {
 	SIZE_T			Size,
@@ -401,9 +403,7 @@ static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 	return 0;
 }
 
-// Файлы должны быть в Ansi с .txt и '\r\n' (обязательно в конце).
-// Skips blank lines.
-// TODO: MMF.
+// Files must only consist of ASCII characters with "\r\n" at the end of each line. Empty lines will be skipped.
 static BOOL LoadAddresses(VOID)
 {
 	WCHAR			 Path[MAX_PATH];
@@ -417,7 +417,7 @@ static BOOL LoadAddresses(VOID)
 	PSTR			 pData		 = NULL;
 	BOOL			 Ok			 = FALSE;
 
-	wprintf(L"\nLoading files with addresses...\n");
+	wprintf(L"Loading files with addresses...\n");
 
 	if (GetDataPath(Path, ARRAYSIZE(Path)))
 	{

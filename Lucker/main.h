@@ -4,8 +4,9 @@
 #include "defines.h" // Выше не должно быть включений с "Windows.h", чтобы не перекрывать WIN32_LEAN_AND_MEAN.
 
 #include "workers.h"
+#include "flags.h"
 
-#define PRINT_INTERVAL 15
+#define PRINT_INTERVAL 15 // In seconds.
 
 static DWORD WINAPI ApplicationRecoveryCallback(PVOID pvParameter);
 static BOOL WINAPI HandlerRoutine(DWORD dwCtrlType);
