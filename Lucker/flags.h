@@ -18,12 +18,6 @@ typedef enum {
 	FA_NUMBER,
 } FLAG_ARGUMENT;
 
-typedef enum {
-	CT_BOTH,
-	CT_UNCOMPRESSED,
-	CT_COMPRESSED,
-} COORDINATE_TYPE;
-
 typedef struct {
 	PCWSTR		  pName;
 	PCWSTR		  pDescription;
@@ -35,9 +29,11 @@ typedef struct {
 typedef const COMMAND_LINE_FLAG  CCOMMAND_LINE_FLAG;
 typedef const COMMAND_LINE_FLAG* PCCOMMAND_LINE_FLAG;
 
+typedef BOOL(*PVALIDATE_FLAGS_ROUTINE)(FLAG_TYPE Type, INT Value);
+
 VOID FlagsPrintUsage(VOID);
 PCCOMMAND_LINE_FLAG FlagsGetDefaults(PDWORD pdwFlagCount);
-PCOMMAND_LINE_FLAG FlagsParse(INT Argc, WCHAR* pArgv[], PDWORD pdwFlagCount);
+PCOMMAND_LINE_FLAG FlagsParse(INT Argc, WCHAR* pArgv[], PVALIDATE_FLAGS_ROUTINE pRoutine, PDWORD pdwFlagCount);
 
 static BOOL FlagsParseArgument(PCOMMAND_LINE_FLAG pFlag, PCWSTR pArgument);
 

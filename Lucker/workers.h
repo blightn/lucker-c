@@ -7,9 +7,10 @@
 #include "crypt.h"
 
 #define DATA_FOLDER				L"Data"
-#define NETWORK_PREFIX_SIZE_MIN 1
+#define NETWORK_PREFIX_SIZE_MIN	1
 #define NETWORK_PREFIX_SIZE_MAX	2
 #define DECODED_HASH_SIZE		20
+#define CHECKSUM_SIZE			4
 
 typedef enum {
 	A_1,	 // sha256 + ripemd160 (BTC, LTC, etc.)
@@ -18,6 +19,7 @@ typedef enum {
 	A_INVALID,
 } ALGORITHM;
 
+// Поменять порядок.
 typedef enum {
 	C_BTC,
 	C_ETH,
@@ -25,6 +27,12 @@ typedef enum {
 	//C_COUNT,
 	C_INVALID,
 } COIN;
+
+typedef enum {
+	CT_BOTH,
+	CT_UNCOMPRESSED,
+	CT_COMPRESSED,
+} COORDINATE_TYPE;
 
 typedef struct {
 	COIN Coin;
@@ -43,25 +51,29 @@ typedef struct {
 	PCWSTR pSymbol;
 } COIN_SYMBOL;
 
-// Не используется.
 typedef struct {
-	BYTE  bPrefix[NETWORK_PREFIX_SIZE_MAX];
-	DWORD dwPrefixSize;
-} NETWORK_PREFIX;
+	BYTE  bPubPrefix[NETWORK_PREFIX_SIZE_MAX];
+	DWORD dwPubPrefixSize;
+	BYTE  bPrivPrefix[NETWORK_PREFIX_SIZE_MAX];
+	DWORD dwPrivPrefixSize;
+} NETWORK_PREFIXES;
 
-typedef const NETWORK_PREFIX* PCNETWORK_PREFIX;
+typedef const NETWORK_PREFIXES* PCNETWORK_PREFIXES;
 
-BOOL StartWorkers(DWORD dwCount);
+BOOL StartWorkers(DWORD dwCount, COORDINATE_TYPE CoordType, BOOL BindToCores);
 VOID StopWorkers(VOID);
 
 DWORD64 GetCycleCount(VOID);
 
 static BOOL GetDataPath(PWSTR pPath, DWORD dwSize);
 static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize);
+static BOOL WriteFileData(PCWSTR pPath, PBYTE pbData, SIZE_T Size);
 static SIZE_T CountLines(PCSTR pData);
 
 static BOOL HexToBin(BYTE bHex, PBYTE pbOut);
 static BOOL HexToBinA(PCSTR pHex, PBYTE pbBuf, DWORD dwSize);
+
+static VOID BinToHex(PCBYTE pbData, DWORD dwDataSize, PSTR pBuf, DWORD dwBufSize);
 
 static COIN CoinFromFileName(PCWSTR pFileName);
 
@@ -70,7 +82,7 @@ static ALGORITHM AlgorithmFromCoin(COIN Coin);
 static PCWSTR SymbolFromCoin(COIN Coin);
 static PCWSTR SymbolFromAddress(PCADDRESS pAddress);
 
-static PCNETWORK_PREFIX NetworkPrefixFromCoin(COIN Coin); // Не используется.
+static PCNETWORK_PREFIXES NetworkPrefixFromCoin(COIN Coin);
 
 static BOOL DecodeAddress(COIN Coin, PCSTR pAddress, PADDRESS pAddresses);
 static SIZE_T CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses);

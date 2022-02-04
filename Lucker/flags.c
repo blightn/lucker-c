@@ -1,11 +1,12 @@
 #include "flags.h"
 
+// Заполнить в "main.c" и передать в FlagsParse().
 static CCOMMAND_LINE_FLAG g_CmdLineFlags[] =
 {
-	{ L"-h",  L"Print help.",																																				 FT_HELP, 		  FA_NONE,   0		 },
-	{ L"-w",  L"Number of workers. Must be in the range [1 <= n <= cores]. 0 - select automatically.",																		 FT_WORKERS,	  FA_NUMBER, 0		 },
-	{ L"-c",  L"Specify the type of coordinates to be compared:\n\t\t0 - use both compressed and uncompressed;\n\t\t1 - uncompressed only;\n\t\t2 - compressed only.\n\t\t", FT_COORDINATES,  FA_NUMBER, CT_BOTH },
-	{ L"-bw", L"Bind workers to cores. You can see the result in the Program manager under the Performance tab.",															 FT_BIND_WORKERS, FA_NONE,	 OFF	 },
+	{ L"-h",  L"Print help.",																																				 FT_HELP, 		  FA_NONE,   0	},
+	{ L"-w",  L"Number of workers. Must be in the range [1 <= n <= cores]. 0 - select automatically.",																		 FT_WORKERS,	  FA_NUMBER, 0	},
+	{ L"-c",  L"Specify the type of coordinates to be compared:\n\t\t0 - use both compressed and uncompressed;\n\t\t1 - uncompressed only;\n\t\t2 - compressed only.\n\t\t", FT_COORDINATES,  FA_NUMBER, 0	},
+	{ L"-bw", L"Bind workers to cores. You can see the result in the Program manager under the Performance tab.",															 FT_BIND_WORKERS, FA_NONE,	 ON	},
 };
 
 static COMMAND_LINE_FLAG g_CmdLineFlagsParsed[ARRAYSIZE(g_CmdLineFlags)];
@@ -53,7 +54,7 @@ PCCOMMAND_LINE_FLAG FlagsGetDefaults(PDWORD pdwFlagCount)
 	return g_CmdLineFlags;
 }
 
-PCOMMAND_LINE_FLAG FlagsParse(INT Argc, WCHAR* pArgv[], PDWORD pdwFlagCount)
+PCOMMAND_LINE_FLAG FlagsParse(INT Argc, WCHAR* pArgv[], PVALIDATE_FLAGS_ROUTINE pRoutine, PDWORD pdwFlagCount)
 {
 	INT i = 0,
 		j = 0;
@@ -80,6 +81,9 @@ PCOMMAND_LINE_FLAG FlagsParse(INT Argc, WCHAR* pArgv[], PDWORD pdwFlagCount)
 				break;
 
 			if (!FlagsParseArgument(&g_CmdLineFlagsParsed[j], pArgv[i + 1]))
+				break;
+
+			if (pRoutine && !pRoutine(g_CmdLineFlagsParsed[j].Type, g_CmdLineFlagsParsed[j].Value))
 				break;
 
 			++i;
@@ -115,14 +119,10 @@ PCOMMAND_LINE_FLAG FlagsParse(INT Argc, WCHAR* pArgv[], PDWORD pdwFlagCount)
 
 static BOOL FlagsParseArgument(PCOMMAND_LINE_FLAG pFlag, PCWSTR pArgument)
 {
-	switch (pFlag->Type)
+	switch (pFlag->Argument)
 	{
-	case FT_WORKERS:
-		return StrToIntExW(pArgument, STIF_SUPPORT_HEX, &pFlag->Value) && pFlag->Value >= 0;
-
-	case FT_COORDINATES:
-		return StrToIntExW(pArgument, STIF_SUPPORT_HEX, &pFlag->Value) &&
-			(pFlag->Value == CT_BOTH || pFlag->Value == CT_UNCOMPRESSED || pFlag->Value == CT_COMPRESSED);
+	case FA_NUMBER:
+		return StrToIntExW(pArgument, STIF_SUPPORT_HEX, &pFlag->Value);
 	}
 
 	return FALSE;

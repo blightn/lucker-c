@@ -7,12 +7,11 @@ static const COIN_SYMBOL g_CoinSymbols[] =
 	{ C_LTC, L"LTC" },
 };
 
-// Не используется.
-static const NETWORK_PREFIX g_NetworkPrefixes[] =
+static const NETWORK_PREFIXES g_NetworkPrefixes[] =
 {
-	{ { 0x00, 0x00 }, 1 }, // BTC
-	{ {  '0',  'x' }, 2 }, // ETH
-	{ { 0x30, 0x00 }, 1 }, // LTC
+	{ { 0x00, 0x00 }, 1, { 0x80, 0x00 }, 1 }, // BTC
+	{ {  '0',  'x' }, 2, { 0x00, 0x00 }, 0 }, // ETH
+	{ { 0x30, 0x00 }, 1, { 0xB0, 0x00 }, 1 }, // LTC
 };
 
 static DWORD		  g_dwWorkers;
@@ -22,7 +21,7 @@ static PHANDLE		  g_phWorkers  = NULL;
 
 static volatile DWORD64 g_qwCycles;
 
-BOOL StartWorkers(DWORD dwCount)
+BOOL StartWorkers(DWORD dwCount, COORDINATE_TYPE CoordType, BOOL BindToCores)
 {
 	DWORD i;
 	BOOL  Ok = FALSE;
@@ -39,8 +38,13 @@ BOOL StartWorkers(DWORD dwCount)
 					{
 						for (i = 0; i < g_dwWorkers; ++i)
 						{
-							if (!(g_phWorkers[i] = CreateThread(NULL, 0, (PTHREAD_START_ROUTINE)WorkerProc, NULL, 0, NULL)))
+							if (!(g_phWorkers[i] = CreateThread(NULL, 0, (PTHREAD_START_ROUTINE)WorkerProc, (PVOID)CoordType, 0, NULL)))
 								break;
+
+							if (BindToCores)
+							{
+								SetThreadAffinityMask(g_phWorkers[i], (DWORD_PTR)(1ULL << i));
+							}
 						}
 
 						Ok = g_phWorkers[g_dwWorkers - 1] != NULL;
@@ -187,6 +191,39 @@ static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize)
 	return pData;
 }
 
+// TODO: MMF.
+static BOOL WriteFileData(PCWSTR pPath, PBYTE pbData, SIZE_T Size)
+{
+	HANDLE		  hFile		= INVALID_HANDLE_VALUE;
+	LARGE_INTEGER liSize;
+	DWORD		  dwWritten	= 0;
+	BOOL		  Ok		= FALSE;
+
+	if ((hFile = CreateFileW(pPath, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL)) != INVALID_HANDLE_VALUE)
+	{
+		SetFilePointer(hFile, 0L, NULL, FILE_END);
+		liSize.QuadPart = Size;
+
+		while (liSize.QuadPart > 0)
+		{
+			dwWritten = 0;
+
+			if (!(WriteFile(hFile, (PCVOID)pbData, liSize.LowPart ? liSize.LowPart : MAXDWORD, &dwWritten, NULL)) || !dwWritten)
+				break;
+
+			pbData			+= dwWritten;
+			liSize.QuadPart -= dwWritten;
+		}
+
+		Ok = liSize.QuadPart == 0 && dwWritten;
+
+		CloseHandle(hFile);
+		hFile = INVALID_HANDLE_VALUE;
+	}
+
+	return Ok;
+}
+
 static SIZE_T CountLines(PCSTR pData)
 {
 	PCSTR  pLine = pData;
@@ -243,6 +280,16 @@ static BOOL HexToBinA(PCSTR pHex, PBYTE pbBuf, DWORD dwSize)
 	return TRUE;
 }
 
+static VOID BinToHex(PCBYTE pbData, DWORD dwDataSize, PSTR pBuf, DWORD dwBufSize)
+{
+	DWORD i;
+
+	for (i = 0; i < dwDataSize; ++i)
+	{
+		StringCchPrintfA(pBuf, dwBufSize, "%s%02x", pBuf, pbData[i]);
+	}
+}
+
 // The filename must start with one of the strings from gpCoinSymbols.
 static COIN CoinFromFileName(PCWSTR pFileName)
 {
@@ -281,8 +328,7 @@ static PCWSTR SymbolFromAddress(PCADDRESS pAddress)
 	return SymbolFromCoin(pAddress->Coin);
 }
 
-// Не используется.
-static PCNETWORK_PREFIX NetworkPrefixFromCoin(COIN Coin)
+static PCNETWORK_PREFIXES NetworkPrefixFromCoin(COIN Coin)
 {
 	return &g_NetworkPrefixes[Coin];
 }
@@ -502,6 +548,7 @@ static VOID HashFromPublicKey(ALGORITHM Algorithm, PCBYTE pbPulicKey, DWORD dwSi
 	}
 }
 
+// Добавить вывод в файл.
 static VOID SavePrivateKey(PCADDRESS pAddress, PCBYTE pbPrivateKey, DWORD dwSize)
 {
 	DWORD i;
@@ -522,6 +569,152 @@ static VOID SavePrivateKey(PCADDRESS pAddress, PCBYTE pbPrivateKey, DWORD dwSize
 	wprintf(L"%s private key found: %S\n", SymbolFromAddress(pAddress), Buf);
 }
 
+//////////////////////////////////////
+
+static BOOL PrivateKeyToWIF(PCBYTE pbPrivateKey, COIN Coin, BOOL Compress, PSTR pBuf, DWORD dwSize)
+{
+	PCNETWORK_PREFIXES pPrefixes = NULL;
+	BYTE			   bBuf[64], // !
+					   bHash[HASH_256_SIZE]; // !
+	DWORD			   dwResSize = 0;
+
+	if (Coin == C_ETH)
+		return FALSE;
+
+	pPrefixes = NetworkPrefixFromCoin(Coin);
+
+	CopyMemory((PVOID)bBuf,	(PCVOID)pPrefixes->bPrivPrefix, pPrefixes->dwPrivPrefixSize);
+	dwResSize += pPrefixes->dwPrivPrefixSize;
+
+	CopyMemory((PVOID)&bBuf[dwResSize], (PCVOID)pbPrivateKey, SECP256K1_PRIVATE_KEY_SIZE);
+	dwResSize += SECP256K1_PRIVATE_KEY_SIZE;
+
+	CryptSHA256(bBuf,  dwResSize,	  bHash);
+	CryptSHA256(bHash, HASH_256_SIZE, bHash);
+
+	CopyMemory((PVOID)&bBuf[dwResSize], (PCVOID)bHash, CHECKSUM_SIZE);
+	dwResSize += CHECKSUM_SIZE;
+
+	// Base58 encode.
+	pBuf[0] = '\0';
+
+	return TRUE;
+}
+
+static BOOL AddressToString(PCADDRESS pAddress, BOOL Compress, PSTR pBuf, DWORD dwSize)
+{
+	PCNETWORK_PREFIXES pPrefixes = NULL;
+	BYTE			   bBuf[64], // !
+					   bHash[HASH_256_SIZE]; // !
+	DWORD			   dwResSize = 0;
+
+	pPrefixes = NetworkPrefixFromCoin(pAddress->Coin);
+
+	if (pAddress->Coin != C_ETH)
+	{
+		CopyMemory((PVOID)bBuf, (PCVOID)pPrefixes->bPubPrefix, pPrefixes->dwPubPrefixSize);
+		dwResSize += pPrefixes->dwPubPrefixSize;
+
+		CopyMemory((PVOID)&bBuf[dwResSize], (PCVOID)pAddress->bHash, sizeof(pAddress->bHash));
+		dwResSize += sizeof(pAddress->bHash);
+
+		CryptSHA256(bBuf,  dwResSize,	  bHash);
+		CryptSHA256(bHash, HASH_256_SIZE, bHash);
+
+		CopyMemory((PVOID)&bBuf[dwResSize], (PCVOID)bHash, CHECKSUM_SIZE);
+		dwResSize += CHECKSUM_SIZE;
+
+		// Base58 encode.
+		pBuf[0] = '\0';
+	}
+	else
+	{
+		CopyMemory((PVOID)pBuf, (PCVOID)pPrefixes->bPubPrefix, pPrefixes->dwPubPrefixSize);
+		dwResSize += pPrefixes->dwPubPrefixSize;
+
+		pBuf[dwResSize] = '\0'; // Попробовать без этого.
+		BinToHex(bBuf, dwResSize, &pBuf[dwResSize], dwSize); // Return BOOL.
+	}
+
+	return TRUE;
+}
+
+//////////////////////////////////////
+
+/*
+BTC private key found: 0x55, 0x00, 0xa1, 0xff, 0x83, 0x78, 0xcc, 0x2c, 0x25, 0x7b, 0xcd, 0x6d, 0x3d, 0x01, 0x86, 0xac, 0x9f, 0xb9, 0xd2, 0x26, 0x15, 0x4f, 0x79, 0x3f, 0x7b, 0xcb, 0x89, 0x2e, 0xfb, 0x34, 0xeb, 0xc7
+*/
+
+/*
+BTC private key found (HEX): 5500a1ff8378cc2c257bcd6d3d0186ac9fb9d226154f793f7bcb892efb34ebc7
+Private key (WIF, uncompressed): 5JTiraPKabEVkVyLFJSCaKcn343iFBULYy25mL4QM6fVhFSJ2od
+Private key (WIF, compressed): Kz4wjpMX1G6Ztzsdx7xE65Aun4Sy3bDfJ6Fn2f823hzueGZNQes6
+Address (uncompressed): 12fokXPiUNSVvab6gxGo7Zgni2VYZS8A4x
+Address (compressed): 1BpfSsF8nQGk2718jnnrC811XxDvoqqJBf
+*/
+
+/*
+ETH private key found (HEX): 5500a1ff8378cc2c257bcd6d3d0186ac9fb9d226154f793f7bcb892efb34ebc7
+Address: 0x38e73420d07d32c789b4349988fd67a667a61892
+*/
+
+// \r\n
+/*static*/ VOID SavePrivateKey_NEW(PCADDRESS pAddress, PCBYTE pbPrivateKey, DWORD dwSize)
+{
+	CHAR  Buf[1024], // !
+		  Tmp[64]; // !
+	DWORD i;
+	WCHAR Path[MAX_PATH];
+
+	StringCchPrintfA(Buf, ARRAYSIZE(Buf), "\r\n%S private key found (HEX): ", SymbolFromAddress(pAddress));
+
+	// BinToHex()
+	for (i = 0; i < dwSize; ++i)
+	{
+		if (i)
+		{
+			StringCchCatA(Buf, ARRAYSIZE(Buf), ", ");
+		}
+
+		StringCchPrintfA(Buf, ARRAYSIZE(Buf), "%s0x%02x", Buf, pbPrivateKey[i]);
+	}
+
+	StringCchCatA(Buf, ARRAYSIZE(Buf), "\r\n");
+
+	switch (pAddress->Coin)
+	{
+	case C_BTC:
+	case C_LTC:
+		PrivateKeyToWIF(pbPrivateKey, pAddress->Coin, FALSE, Tmp, ARRAYSIZE(Tmp));
+		StringCchPrintfA(Buf, ARRAYSIZE(Buf), "%sPrivate key (WIF, uncompressed): %s", Buf, Tmp);
+
+		PrivateKeyToWIF(pbPrivateKey, pAddress->Coin, TRUE, Tmp, ARRAYSIZE(Tmp));
+		StringCchPrintfA(Buf, ARRAYSIZE(Buf), "%sPrivate key (WIF, compressed): %s", Buf, Tmp);
+
+		AddressToString(pAddress, FALSE, Tmp, ARRAYSIZE(Tmp));
+		StringCchPrintfA(Buf, ARRAYSIZE(Buf), "%sAddress (uncompressed): %s", Buf, Tmp);
+
+		AddressToString(pAddress, TRUE, Tmp, ARRAYSIZE(Tmp));
+		StringCchPrintfA(Buf, ARRAYSIZE(Buf), "%sAddress (compressed): %s", Buf, Tmp);
+		break;
+
+	case C_ETH:
+		AddressToString(pAddress, FALSE, Tmp, ARRAYSIZE(Tmp));
+		StringCchPrintfA(Buf, ARRAYSIZE(Buf), "%sAddress: %s", Buf, Tmp);
+		break;
+	}
+
+	StringCchCatA(Buf, ARRAYSIZE(Buf), "\r\n");
+
+	printf(Buf);
+
+	if (GetDataPath(Path, ARRAYSIZE(Path)))
+	{
+		StringCchCatW(Path, ARRAYSIZE(Path), L"\\Result.txt");
+		WriteFileData(Path, (PBYTE)Buf, lstrlenA(Buf));
+	}
+}
+
 /*
 Range of valid ECDSA private keys:
 	- Nearly every 256-bit number is a valid ECDSA private key. Specifically, any 256-bit number from 0x1 to
@@ -533,16 +726,17 @@ Range of valid ECDSA private keys:
 // Попробовать вариант с брутом только BTC и сравнить производительность.
 static DWORD WINAPI WorkerProc(PVOID pvParam)
 {
-	PEC_CONTEXT   pCtx = NULL;
-	BYTE		  bPrivKey[SECP256K1_PRIVATE_KEY_SIZE],
-				  bPubKey[SECP256K1_PUBLIC_KEY_SIZE],
-				  bPubKeyComp[SECP256K1_PUBLIC_KEY_COMP_SIZE],
-				  bHash[HASH_256_SIZE],
-				  bHashComp[HASH_256_SIZE];
-	EC_PUBLIC_KEY PubKey;
-	ALGORITHM	  Alg;
-	DWORD		  i;
-	PCADDRESS	  pAddress = NULL;
+	COORDINATE_TYPE CoordType = (COORDINATE_TYPE)pvParam;
+	PEC_CONTEXT		pCtx	  = NULL;
+	BYTE			bPrivKey[SECP256K1_PRIVATE_KEY_SIZE],
+					bPubKey[SECP256K1_PUBLIC_KEY_SIZE],
+					bPubKeyComp[SECP256K1_PUBLIC_KEY_COMP_SIZE],
+					bHash[HASH_256_SIZE],
+					bHashComp[HASH_256_SIZE];
+	EC_PUBLIC_KEY	PubKey;
+	ALGORITHM		Alg;
+	DWORD			i;
+	PCADDRESS		pAddress  = NULL;
 
 	if (pCtx = CryptECContextCreate(ECT_SECP256K1))
 	{
@@ -563,47 +757,49 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 						switch (Alg)
 						{
 						case A_1:
-							HashFromPublicKey(Alg, bPubKey,		sizeof(bPubKey),	 bHash);
-							HashFromPublicKey(Alg, bPubKeyComp, sizeof(bPubKeyComp), bHashComp);
-
-							for (i = 0; i < g_AlgorithmData[Alg].AddressCount; ++i)
+							if (CoordType == CT_BOTH)
 							{
-								pAddress = &g_AlgorithmData[Alg].pAddresses[i];
+								HashFromPublicKey(Alg, bPubKey,		sizeof(bPubKey),	 bHash);
+								HashFromPublicKey(Alg, bPubKeyComp, sizeof(bPubKeyComp), bHashComp);
 
-								if (!memcmp((PCVOID)bHash,	   (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)) ||
-									!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
+								for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
 								{
-									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
+									if (!memcmp((PCVOID)bHash,	   (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)) ||
+										!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
+									{
+										SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
+									}
 								}
 							}
-
-							/*
-							for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
+							else if (CoordType == CT_UNCOMPRESSED)
 							{
-								if (!memcmp((PCVOID)bHash,	   (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)) ||
-									!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
+								HashFromPublicKey(Alg, bPubKey, sizeof(bPubKey), bHash);
+
+								for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
 								{
-									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
+									if (!memcmp((PCVOID)bHash, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
+									{
+										SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
+									}
 								}
 							}
-							*/
+							else // CoordType == CT_COMPRESSED
+							{
+								HashFromPublicKey(Alg, bPubKeyComp, sizeof(bPubKeyComp), bHashComp);
+
+								for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
+								{
+									if (!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
+									{
+										SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
+									}
+								}
+							}
 							break;
 
 						case A_2:
 							HashFromPublicKey(Alg, bPubKey, sizeof(bPubKey), bHash);
 
-							for (i = 0; i < g_AlgorithmData[Alg].AddressCount; ++i)
-							{
-								pAddress = &g_AlgorithmData[Alg].pAddresses[i];
-
-								// Попробовать сравнивать с отступом вместо предварительного перемещения в начало.
-								if (!memcmp((PCVOID)bHash, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
-								{
-									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
-								}
-							}
-
-							/*
 							for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
 							{
 								// Попробовать сравнивать с отступом вместо предварительного перемещения в начало.
@@ -612,7 +808,6 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 								}
 							}
-							*/
 							break;
 						}
 					}
