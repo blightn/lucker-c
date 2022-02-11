@@ -1,5 +1,6 @@
 #include "base58.h"
 
+static const CHAR g_Base58Digits[] = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 static const CHAR g_Base58Map[256] =
 {
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -20,34 +21,97 @@ static const CHAR g_Base58Map[256] =
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 };
 
-// DWORD => SIZE_T.
-DWORD Base58Decode(PCSTR pData, PBYTE pbBuf, DWORD dwSize)
+// Требуется больше места на выходе, чем надо.
+BOOL Base58Encode(PCBYTE pbData, SIZE_T DataSize, PSTR pBuf, PSIZE_T pBufSize)
 {
-	INT Len,
-		Res,
-		i,
-		Carry,
-		j,
-		Tmp;
+	SIZE_T ZeroCount,
+		   Size,
+		   i,
+		   End,
+		   j,
+		   Carry;
+
+	if (!DataSize)
+	{
+		*pBufSize = 0;
+		return FALSE;
+	}
+
+	for (ZeroCount = 0; ZeroCount < DataSize && !pbData[ZeroCount]; ++ZeroCount);
+
+	Size = (DataSize - ZeroCount) * 138 / 100 + 1;
+
+	if (*pBufSize <= ZeroCount + Size)
+	{
+		*pBufSize = ZeroCount + Size + 1;
+		return FALSE;
+	}
+
+	ZeroMemory((PVOID)pBuf, *pBufSize);
+
+	for (i = ZeroCount, End = Size - 1; i < DataSize; ++i, End = j)
+	{
+		for (Carry = pbData[i], j = Size - 1; Carry || j > End; --j)
+		{
+			Carry  += (SIZE_T)pBuf[j] << 8;
+			pBuf[j] = Carry % 58;
+			Carry  /= 58;
+
+			if (!j)
+				break;
+		}
+	}
+
+	for (j = 0; j < Size && !pBuf[j]; ++j);
+
+	for (i = 0; j < Size; ++i, ++j)
+	{
+		pBuf[i] = g_Base58Digits[pBuf[j]];
+	}
+
+	if (ZeroCount)
+	{
+		MoveMemory((PVOID)&pBuf[ZeroCount], (PCVOID)pBuf, i);
+		FillMemory((PVOID)pBuf, ZeroCount, '1');
+	}
+
+	i        += ZeroCount;
+	pBuf[i]   = '\0';
+	*pBufSize = i + 1;
+
+	return TRUE;
+}
+
+// Требуется больше места на выходе, чем надо.
+BOOL Base58Decode(PCSTR pData, PBYTE pbBuf, PSIZE_T pBufSize)
+{
+	SIZE_T Len,
+		   Res,
+		   i,
+		   Carry,
+		   j;
+	BYTE   bTmp;
 
 	Len		 = lstrlenA(pData);
 	Res		 = 0;
 	pbBuf[0] = 0x00;
 
-	// 1:1 is the minimum when all encoded bytes are 0.
-	if (dwSize < (DWORD)Len)
-		return 0;
+	if (*pBufSize <= Len * 733 / 1000)
+	{
+		*pBufSize = Len * 733 / 1000 + 1;
+		return FALSE;
+	}
 
 	for (i = 0; i < Len; ++i)
 	{
 		Carry = g_Base58Map[pData[i]];
 
 		if (Carry == -1)
-			return 0;
+			return FALSE;
 
 		for (j = 0; j < Res; ++j)
 		{
-			Carry	+= pbBuf[j] * 58;
+			Carry	+= pbBuf[j] * (SIZE_T)58;
 			pbBuf[j] = Carry	& 0xFF;
 			Carry  >>= 8;
 		}
@@ -66,10 +130,12 @@ DWORD Base58Decode(PCSTR pData, PBYTE pbBuf, DWORD dwSize)
 
 	for (i = 0; i < Res / 2; ++i)
 	{
-		Tmp				   = pbBuf[i];
+		bTmp			   = pbBuf[i];
 		pbBuf[i]		   = pbBuf[Res - i - 1];
-		pbBuf[Res - i - 1] = Tmp;
+		pbBuf[Res - i - 1] = bTmp;
 	}
 
-	return Res;
+	*pBufSize = Res;
+
+	return TRUE;
 }

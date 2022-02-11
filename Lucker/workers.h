@@ -82,7 +82,7 @@ static ALGORITHM AlgorithmFromCoin(COIN Coin);
 static PCWSTR SymbolFromCoin(COIN Coin);
 static PCWSTR SymbolFromAddress(PCADDRESS pAddress);
 
-static PCNETWORK_PREFIXES NetworkPrefixFromCoin(COIN Coin);
+static PCNETWORK_PREFIXES NetworkPrefixesFromCoin(COIN Coin);
 
 static BOOL DecodeAddress(COIN Coin, PCSTR pAddress, PADDRESS pAddresses);
 static SIZE_T CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses);
@@ -90,7 +90,10 @@ static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines);
 static BOOL LoadAddresses(VOID);
 
 static VOID HashFromPublicKey(ALGORITHM Algorithm, PCBYTE pbPulicKey, DWORD dwSize, PBYTE pbHash);
+static VOID PrivateKeyToWIF(PCBYTE pbPrivateKey, DWORD dwKeySize, COIN Coin, BOOL Compress, PSTR pBuf, DWORD dwBufSize);
+static VOID AddressToString(PCADDRESS pAddress, PSTR pBuf, DWORD dwSize);
 static VOID SavePrivateKey(PCADDRESS pAddress, PCBYTE pbPrivateKey, DWORD dwSize);
+
 static DWORD WINAPI WorkerProc(PVOID pvParam);
 
 #endif // _WORKERS_H_
