@@ -127,12 +127,12 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 	DWORD				dwWorkers;
 	DWORD64				qwCycles = 0;
 
-	if (!(pFlags = FlagsParse(Argc, pArgv, (PVALIDATE_FLAGS_ROUTINE)ValidateFlagsCallback, NULL)))
+	pFlags = FlagsParse(Argc, pArgv, (PVALIDATE_FLAGS_ROUTINE)ValidateFlagsCallback, NULL);
+
+	if (!pFlags || pFlags[FT_HELP].Value == ON)
 	{
 		FlagsPrintUsage();
-		wprintf(L"The auto configuring mode selected.\n\n");
-
-		pFlags = FlagsGetDefaults(NULL);
+		return 0;
 	}
 
 	GetNativeSystemInfo(&SysInfo);
