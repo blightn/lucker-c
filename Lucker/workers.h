@@ -1,7 +1,7 @@
 #ifndef _WORKERS_H_
 #define _WORKERS_H_
 
-#include "defines.h" // Выше не должно быть включений с "Windows.h", чтобы не перекрывать WIN32_LEAN_AND_MEAN.
+#include "defines.h"
 
 #include "base58.h"
 #include "crypt.h"
@@ -11,6 +11,7 @@
 #define NETWORK_PREFIX_SIZE_MAX	2
 #define DECODED_HASH_SIZE		20
 #define CHECKSUM_SIZE			4
+#define LOOP_ITERATIONS         0xFF
 
 typedef enum {
 	A_1,	 // sha256 + ripemd160 (BTC, LTC, etc.)
@@ -19,7 +20,6 @@ typedef enum {
 	A_INVALID,
 } ALGORITHM;
 
-// Поменять порядок.
 typedef enum {
 	C_BTC,
 	C_ETH,
@@ -36,7 +36,7 @@ typedef enum {
 
 typedef struct {
 	COIN Coin;
-	BYTE bHash[DECODED_HASH_SIZE]; // Создать тип.
+	BYTE bHash[DECODED_HASH_SIZE];
 } ADDRESS, *PADDRESS;
 
 typedef const ADDRESS* PCADDRESS;
@@ -60,14 +60,14 @@ typedef struct {
 
 typedef const NETWORK_PREFIXES* PCNETWORK_PREFIXES;
 
-BOOL StartWorkers(DWORD dwCount, COORDINATE_TYPE CoordType, BOOL BindToCores);
+BOOL StartWorkers(DWORD dwCount, COORDINATE_TYPE CoordType, BOOL BindToCores, BOOL SMT);
 VOID StopWorkers(VOID);
 
 DWORD64 GetCycleCount(VOID);
 
 static BOOL GetDataPath(PWSTR pPath, DWORD dwSize);
 static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize);
-static BOOL WriteFileData(PCWSTR pPath, PBYTE pbData, SIZE_T Size);
+static BOOL WriteFileData(PCWSTR pPath, PCBYTE pbData, SIZE_T Size);
 static SIZE_T CountLines(PCSTR pData);
 
 static BOOL HexToBin(BYTE bHex, PBYTE pbOut);

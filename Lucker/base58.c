@@ -21,7 +21,7 @@ static const CHAR g_Base58Map[256] =
 	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
 };
 
-// Требуется больше места на выходе, чем надо.
+// Requires more space for pbBuf than necessary due temporary calculations.
 BOOL Base58Encode(PCBYTE pbData, SIZE_T DataSize, PSTR pBuf, PSIZE_T pBufSize)
 {
 	SIZE_T ZeroCount,
@@ -82,7 +82,7 @@ BOOL Base58Encode(PCBYTE pbData, SIZE_T DataSize, PSTR pBuf, PSIZE_T pBufSize)
 	return TRUE;
 }
 
-// Требуется больше места на выходе, чем надо.
+// Requires more space for pbBuf than necessary due temporary calculations.
 BOOL Base58Decode(PCSTR pData, PBYTE pbBuf, PSIZE_T pBufSize)
 {
 	SIZE_T Len,

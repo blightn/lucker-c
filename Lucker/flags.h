@@ -1,7 +1,7 @@
 #ifndef _FLAG_H_
 #define _FLAG_H_
 
-#include "defines.h" // Выше не должно быть включений с "Windows.h", чтобы не перекрывать WIN32_LEAN_AND_MEAN.
+#include "defines.h"
 
 #define OFF (FALSE)
 #define ON	(TRUE)

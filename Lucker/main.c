@@ -50,7 +50,7 @@ static BOOL IsSMTEnabled(PBOOL pEnabled)
 	return Ok;
 }
 
-// Те же строки в "flags.c".
+// The same strings in "flags.c".
 static PCWSTR CoordinateTypeToString(COORDINATE_TYPE Type)
 {
 	switch (Type)
@@ -141,14 +141,10 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 	if (SMT)
 	{
 		wprintf(L"NOTE: Simultaneous multithreading (SMT) is enabled. This means that you have half as many physical processors as logical ones.\n\n");
-		SysInfo.dwNumberOfProcessors /= 2; // Сравнить "С" и "БЕЗ".
+		SysInfo.dwNumberOfProcessors /= 2;
 	}
 
 	dwWorkers = pFlags[FT_WORKERS].Value == 0 ? SysInfo.dwNumberOfProcessors : min((DWORD)pFlags[FT_WORKERS].Value, SysInfo.dwNumberOfProcessors);
-
-#ifdef _DEBUG
-	//dwWorkers = 1; // !
-#endif
 
 	wprintf(L"Workers:\t%u/%u\nCoordinates:\t%s\nBind to cores:\t%s\n\n", dwWorkers, SysInfo.dwNumberOfProcessors,
 		CoordinateTypeToString((COORDINATE_TYPE)pFlags[FT_COORDINATES].Value), pFlags[FT_BIND_WORKERS].Value ? L"yes" : L"no");
@@ -161,7 +157,7 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 	{
 		if (g_hStopEvent = CreateEventW(NULL, TRUE, FALSE, NULL))
 		{
-			if (StartWorkers(dwWorkers, (COORDINATE_TYPE)pFlags[FT_COORDINATES].Value, (BOOL)pFlags[FT_BIND_WORKERS].Value))
+			if (StartWorkers(dwWorkers, (COORDINATE_TYPE)pFlags[FT_COORDINATES].Value, (BOOL)pFlags[FT_BIND_WORKERS].Value, SMT))
 			{
 				SetConsoleCtrlHandler((PHANDLER_ROUTINE)HandlerCallback, TRUE);
 				wprintf(L"All workers launched. Press 'CTRL + C' to stop.\n\n");
@@ -170,7 +166,6 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 				{
 					qwCycles = GetCycleCount();
 					wprintf(L"Speed: %llu cycles/s.\n", qwCycles / PRINT_INTERVAL);
-					// Проверить с "Sleep(1000)" корректность подсчёта.
 				}
 
 				if (qwCycles)

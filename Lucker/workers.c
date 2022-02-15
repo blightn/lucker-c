@@ -14,14 +14,14 @@ static const NETWORK_PREFIXES g_NetworkPrefixes[] =
 	{ { 0x30, 0x00 }, 1, { 0xB0, 0x00 }, 1 }, // LTC
 };
 
-static DWORD		  g_dwWorkers;
+static DWORD          g_dwWorkers;
 static ALGORITHM_DATA g_AlgorithmData[A_COUNT];
-static HANDLE		  g_hStopEvent = NULL;
-static PHANDLE		  g_phWorkers  = NULL;
+static HANDLE         g_hStopEvent = NULL;
+static PHANDLE        g_phWorkers  = NULL;
 
 static volatile DWORD64 g_qwCycles;
 
-BOOL StartWorkers(DWORD dwCount, COORDINATE_TYPE CoordType, BOOL BindToCores)
+BOOL StartWorkers(DWORD dwCount, COORDINATE_TYPE CoordType, BOOL BindToCores, BOOL SMT)
 {
 	DWORD i;
 	BOOL  Ok = FALSE;
@@ -43,7 +43,7 @@ BOOL StartWorkers(DWORD dwCount, COORDINATE_TYPE CoordType, BOOL BindToCores)
 
 							if (BindToCores)
 							{
-								SetThreadAffinityMask(g_phWorkers[i], (DWORD_PTR)(1ULL << i));
+								SetThreadAffinityMask(g_phWorkers[i], (DWORD_PTR)(1ULL << (i + i * SMT)));
 							}
 						}
 
@@ -192,7 +192,7 @@ static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize)
 }
 
 // TODO: MMF.
-static BOOL WriteFileData(PCWSTR pPath, PBYTE pbData, SIZE_T Size)
+static BOOL WriteFileData(PCWSTR pPath, PCBYTE pbData, SIZE_T Size)
 {
 	HANDLE		  hFile		= INVALID_HANDLE_VALUE;
 	LARGE_INTEGER liSize;
@@ -333,7 +333,6 @@ static PCNETWORK_PREFIXES NetworkPrefixesFromCoin(COIN Coin)
 	return &g_NetworkPrefixes[Coin];
 }
 
-// ¬алидацию и декодирование адреса можно вынести в отдельные ф-ии (на каждую монету).
 static BOOL DecodeAddress(COIN Coin, PCSTR pAddress, PADDRESS pAddresses)
 {
 	SIZE_T Len,
@@ -459,9 +458,10 @@ static BOOL LoadAddresses(VOID)
 	WIN32_FIND_DATAW FindData;
 	HANDLE			 hFind		 = INVALID_HANDLE_VALUE;
 	SIZE_T			 AllFiles	 = 0,
-					 AllLines,
-					 LoadedLines,
-					 LoadedFiles = 0;
+		             FileLines,
+		             ParsedLines,
+		             LoadedFiles = 0,
+					 LoadedLines = 0;
 	COIN			 Coin;
 	PSTR			 pData		 = NULL;
 	BOOL			 Ok			 = FALSE;
@@ -490,10 +490,12 @@ static BOOL LoadAddresses(VOID)
 
 						if (pData = ReadFileData(Path, NULL))
 						{
-							if ((AllLines = CountLines(pData)) && (LoadedLines = ParseAddresses(Coin, pData, AllLines)))
+							if ((FileLines = CountLines(pData)) && (ParsedLines = ParseAddresses(Coin, pData, FileLines)))
 							{
-								wprintf(L"File %s loaded: %zu/%zu addresses.\n", FindData.cFileName, LoadedLines, AllLines);
+								wprintf(L"File %s loaded: %zu/%zu addresses.\n", FindData.cFileName, ParsedLines, FileLines);
+
 								++LoadedFiles;
+								LoadedLines += ParsedLines;
 							}
 							else
 								wprintf(L"Can't load file: %s\n", FindData.cFileName);
@@ -526,12 +528,12 @@ static BOOL LoadAddresses(VOID)
 	else
 		wprintf(L"Can't get path to " DATA_FOLDER L" folder.\n");
 
-	wprintf(L"%zu/%zu files loaded.\n\n", LoadedFiles, AllFiles);
+	wprintf(L"%zu/%zu files loaded.\n", LoadedFiles, AllFiles);
+	wprintf(L"%zu addresses loaded.\n\n", LoadedLines);
 
 	return Ok;
 }
 
-// ѕопробовать вариант с inline и сравнить производительность.
 // pbHash size must be at least 32 bytes (sha256).
 static VOID HashFromPublicKey(ALGORITHM Algorithm, PCBYTE pbPulicKey, DWORD dwSize, PBYTE pbHash)
 {
@@ -626,34 +628,24 @@ static VOID AddressToString(PCADDRESS pAddress, PSTR pBuf, DWORD dwSize)
 		CopyMemory((PVOID)pBuf, (PCVOID)pPrefixes->bPubPrefix, pPrefixes->dwPubPrefixSize);
 		dwResSize += pPrefixes->dwPubPrefixSize;
 
-		pBuf[dwResSize] = '\0'; // ѕопробовать без этого.
-		BinToHex(pAddress->bHash, sizeof(pAddress->bHash), &pBuf[dwResSize], dwSize); // Return BOOL.
+		pBuf[dwResSize] = '\0';
+		BinToHex(pAddress->bHash, sizeof(pAddress->bHash), &pBuf[dwResSize], dwSize);
 	}
 }
-
-/*
-BTC private key found: 0x55, 0x00, 0xa1, 0xff, 0x83, 0x78, 0xcc, 0x2c, 0x25, 0x7b, 0xcd, 0x6d, 0x3d, 0x01, 0x86, 0xac, 0x9f, 0xb9, 0xd2, 0x26, 0x15, 0x4f, 0x79, 0x3f, 0x7b, 0xcb, 0x89, 0x2e, 0xfb, 0x34, 0xeb, 0xc7
-*/
 
 /*
 BTC private key found (HEX): 5500a1ff8378cc2c257bcd6d3d0186ac9fb9d226154f793f7bcb892efb34ebc7
 Private key (WIF, uncompressed): 5JTiraPKabEVkVyLFJSCaKcn343iFBULYy25mL4QM6fVhFSJ2od
 Private key (WIF, compressed): Kz4wjpMX1G6Ztzsdx7xE65Aun4Sy3bDfJ6Fn2f823hzueGZNQes6
-Address (uncompressed): 12fokXPiUNSVvab6gxGo7Zgni2VYZS8A4x
-Address (compressed): 1BpfSsF8nQGk2718jnnrC811XxDvoqqJBf
-*/
+Address: 12fokXPiUNSVvab6gxGo7Zgni2VYZS8A4x
 
-/*
 ETH private key found (HEX): 5500a1ff8378cc2c257bcd6d3d0186ac9fb9d226154f793f7bcb892efb34ebc7
 Address: 0x38e73420d07d32c789b4349988fd67a667a61892
 */
-
-// \r\n
-// ќбеспечить потокобезопасность.
 static VOID SavePrivateKey(PCADDRESS pAddress, PCBYTE pbPrivateKey, DWORD dwSize)
 {
-	CHAR  Buf[1024], // !
-		  Tmp[64]; // !
+	CHAR  Buf[512],
+		  Tmp[64];
 	WCHAR Path[MAX_PATH];
 
 	StringCchPrintfA(Buf, ARRAYSIZE(Buf), "\r\n%S private key found (HEX): ", SymbolFromAddress(pAddress));
@@ -678,11 +670,12 @@ static VOID SavePrivateKey(PCADDRESS pAddress, PCBYTE pbPrivateKey, DWORD dwSize
 	}
 
 	printf(Buf);
+	printf("\n");
 
 	if (GetDataPath(Path, ARRAYSIZE(Path)))
 	{
 		StringCchCatW(Path, ARRAYSIZE(Path), L"Result.txt");
-		WriteFileData(Path, (PBYTE)Buf, lstrlenA(Buf));
+		WriteFileData(Path, (PCBYTE)Buf, lstrlenA(Buf));
 	}
 	else
 		wprintf(L"Can't save private key to file.\n");
@@ -694,13 +687,12 @@ Range of valid ECDSA private keys:
 		0xFFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFE BAAE DCE6 AF48 A03B BFD2 5E8C D036 4140 is a valid private key.
 	- The range of valid private keys is governed by the secp256k1 ECDSA standard used by Bitcoin.
 */
-
-// ѕопробовать один контекст на все потоки.
-// ѕопробовать вариант с брутом только BTC и сравнить производительность.
 static DWORD WINAPI WorkerProc(PVOID pvParam)
 {
 	COORDINATE_TYPE CoordType = (COORDINATE_TYPE)pvParam;
 	PEC_CONTEXT		pCtx	  = NULL;
+	DWORD			i,
+					j;
 	BYTE			bPrivKey[SECP256K1_PRIVATE_KEY_SIZE],
 					bPubKey[SECP256K1_PUBLIC_KEY_SIZE],
 					bPubKeyComp[SECP256K1_PUBLIC_KEY_COMP_SIZE],
@@ -708,96 +700,90 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 					bHashComp[HASH_256_SIZE];
 	EC_PUBLIC_KEY	PubKey;
 	ALGORITHM		Alg;
-	DWORD			i;
 	PCADDRESS		pAddress  = NULL;
 
 	if (pCtx = CryptECContextCreate(ECT_SECP256K1))
 	{
 		while (WaitForSingleObject(g_hStopEvent, 0) == WAIT_TIMEOUT)
 		{
-			// We randomize all 32 bytes without checking the range, because the chance of getting a zero or
-			// a value greater than 0xFFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFE BAAE DCE6 AF48 A03B BFD2 5E8C D036 4140
-			// is very small, but much more than a chance to get the right address ;)
-			if (CryptRandom(bPrivKey, sizeof(bPrivKey)))
+			for (i = 0; i < LOOP_ITERATIONS; ++i)
 			{
-				if (CryptECPublicKeyFromSecret(pCtx, bPrivKey, &PubKey))
+				// We randomize all 32 bytes without checking the range, because the chance of getting a zero or
+				// a value greater than 0xFFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFE BAAE DCE6 AF48 A03B BFD2 5E8C D036 4140
+				// is very small, but much more than a chance to get the right address ;)
+				if (CryptRandom(bPrivKey, sizeof(bPrivKey)))
 				{
-					//CryptECPublicKeyToBytes(pCtx, &PubKey, FALSE, bPubKey,	   sizeof(bPubKey)); // !
-					//CryptECPublicKeyToBytes(pCtx, &PubKey, TRUE,  bPubKeyComp, sizeof(bPubKeyComp)); // !
-
-					for (Alg = A_1; Alg < A_COUNT; ++Alg)
+					if (CryptECPublicKeyFromSecret(pCtx, bPrivKey, &PubKey))
 					{
-						switch (Alg)
+						for (Alg = A_1; Alg < A_COUNT; ++Alg)
 						{
-						case A_1:
-							if (CoordType == CT_BOTH)
+							switch (Alg)
 							{
-								CryptECPublicKeyToBytes(pCtx, &PubKey, FALSE, bPubKey,     sizeof(bPubKey)    );
-								CryptECPublicKeyToBytes(pCtx, &PubKey, TRUE,  bPubKeyComp, sizeof(bPubKeyComp));
-
-								HashFromPublicKey(Alg, bPubKey,		sizeof(bPubKey),	 bHash);
-								HashFromPublicKey(Alg, bPubKeyComp, sizeof(bPubKeyComp), bHashComp);
-
-								for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
+							case A_1:
+								if (CoordType == CT_BOTH)
 								{
-									if (!memcmp((PCVOID)bHash,	   (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)) ||
-										!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
+									CryptECPublicKeyToBytes(pCtx, &PubKey, FALSE, bPubKey,     sizeof(bPubKey)    );
+									CryptECPublicKeyToBytes(pCtx, &PubKey, TRUE,  bPubKeyComp, sizeof(bPubKeyComp));
+
+									HashFromPublicKey(Alg, bPubKey,     sizeof(bPubKey),     bHash    );
+									HashFromPublicKey(Alg, bPubKeyComp, sizeof(bPubKeyComp), bHashComp);
+
+									for (j = 0, pAddress = g_AlgorithmData[Alg].pAddresses; j < g_AlgorithmData[Alg].AddressCount; ++j, ++pAddress)
 									{
-										SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
+										if (!memcmp((PCVOID)bHash,     (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)) ||
+											!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
+										{
+											SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
+										}
 									}
 								}
-							}
-							else if (CoordType == CT_UNCOMPRESSED)
-							{
-								CryptECPublicKeyToBytes(pCtx, &PubKey, FALSE, bPubKey, sizeof(bPubKey));
+								else if (CoordType == CT_UNCOMPRESSED)
+								{
+									CryptECPublicKeyToBytes(pCtx, &PubKey, FALSE, bPubKey, sizeof(bPubKey));
+									HashFromPublicKey(Alg, bPubKey, sizeof(bPubKey), bHash);
 
+									for (j = 0, pAddress = g_AlgorithmData[Alg].pAddresses; j < g_AlgorithmData[Alg].AddressCount; ++j, ++pAddress)
+									{
+										if (!memcmp((PCVOID)bHash, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
+										{
+											SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
+										}
+									}
+								}
+								else // CoordType == CT_COMPRESSED
+								{
+									CryptECPublicKeyToBytes(pCtx, &PubKey, TRUE, bPubKeyComp, sizeof(bPubKeyComp));
+									HashFromPublicKey(Alg, bPubKeyComp, sizeof(bPubKeyComp), bHashComp);
+
+									for (j = 0, pAddress = g_AlgorithmData[Alg].pAddresses; j < g_AlgorithmData[Alg].AddressCount; ++j, ++pAddress)
+									{
+										if (!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
+										{
+											SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
+										}
+									}
+								}
+								break;
+
+							case A_2:
+								CryptECPublicKeyToBytes(pCtx, &PubKey, FALSE, bPubKey, sizeof(bPubKey));
 								HashFromPublicKey(Alg, bPubKey, sizeof(bPubKey), bHash);
 
-								for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
+								for (j = 0, pAddress = g_AlgorithmData[Alg].pAddresses; j < g_AlgorithmData[Alg].AddressCount; ++j, ++pAddress)
 								{
 									if (!memcmp((PCVOID)bHash, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
 									{
 										SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 									}
 								}
+								break;
 							}
-							else // CoordType == CT_COMPRESSED
-							{
-								CryptECPublicKeyToBytes(pCtx, &PubKey, TRUE, bPubKeyComp, sizeof(bPubKeyComp));
-
-								HashFromPublicKey(Alg, bPubKeyComp, sizeof(bPubKeyComp), bHashComp);
-
-								for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
-								{
-									if (!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
-									{
-										SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
-									}
-								}
-							}
-							break;
-
-						case A_2:
-							CryptECPublicKeyToBytes(pCtx, &PubKey, FALSE, bPubKey, sizeof(bPubKey));
-
-							HashFromPublicKey(Alg, bPubKey, sizeof(bPubKey), bHash);
-
-							for (i = 0, pAddress = g_AlgorithmData[Alg].pAddresses; i < g_AlgorithmData[Alg].AddressCount; ++i, ++pAddress)
-							{
-								// ѕопробовать сравнивать с отступом вместо предварительного перемещени€ в начало.
-								if (!memcmp((PCVOID)bHash, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
-								{
-									SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
-								}
-							}
-							break;
 						}
 					}
 				}
 			}
 
-			InterlockedAdd64(&g_qwCycles, 1);
-			//InterlockedAdd64(&g_qwCycles, LOOP_ITERATIONS);
+			InterlockedAdd64(&g_qwCycles, LOOP_ITERATIONS);
 		}
 
 		CryptECContextDestroy(pCtx);

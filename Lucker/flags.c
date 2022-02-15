@@ -1,12 +1,11 @@
 #include "flags.h"
 
-// Заполнить в "main.c" и передать в FlagsParse().
 static CCOMMAND_LINE_FLAG g_CmdLineFlags[] =
 {
-	{ L"-h",  L"Print help.",																																				 FT_HELP, 		  FA_NONE,   0	},
-	{ L"-w",  L"Number of workers. Must be in the range [1 <= n <= cores]. 0 - select automatically.",																		 FT_WORKERS,	  FA_NUMBER, 0	},
-	{ L"-c",  L"Specify the type of coordinates to be compared:\n\t\t0 - use both compressed and uncompressed;\n\t\t1 - uncompressed only;\n\t\t2 - compressed only.\n\t\t", FT_COORDINATES,  FA_NUMBER, 0	},
-	{ L"-bw", L"Bind workers to cores. You can see the result in the Program manager under the Performance tab.",															 FT_BIND_WORKERS, FA_NONE,	 ON	},
+	{ L"-h",  L"Print help.",																																				 FT_HELP, 		  FA_NONE,   0   },
+	{ L"-w",  L"Number of workers. Must be in the range [1 <= n <= cores]. 0 - select automatically.",																		 FT_WORKERS,	  FA_NUMBER, 0   },
+	{ L"-c",  L"Specify the type of coordinates to be compared:\n\t\t0 - use both compressed and uncompressed;\n\t\t1 - uncompressed only;\n\t\t2 - compressed only.\n\t\t", FT_COORDINATES,  FA_NUMBER, 0   },
+	{ L"-bw", L"Bind workers to cores. You can see the result in the Program manager under the Performance tab.",															 FT_BIND_WORKERS, FA_NONE,	 OFF },
 };
 
 static COMMAND_LINE_FLAG g_CmdLineFlagsParsed[ARRAYSIZE(g_CmdLineFlags)];
