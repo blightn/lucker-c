@@ -145,7 +145,8 @@ static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize)
 				  pTmp	 = NULL;
 	DWORD		  dwRead = 0;
 
-	if ((hFile = CreateFileW(pPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL)) != INVALID_HANDLE_VALUE)
+	if ((hFile = CreateFileW(pPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL)) != INVALID_HANDLE_VALUE)
 	{
 #ifdef _WIN64
 		if (GetFileSizeEx(hFile, &liSize) && liSize.QuadPart && liSize.QuadPart < MAXDWORD64)
@@ -199,7 +200,8 @@ static BOOL WriteFileData(PCWSTR pPath, PCBYTE pbData, SIZE_T Size)
 	DWORD		  dwWritten	= 0;
 	BOOL		  Ok		= FALSE;
 
-	if ((hFile = CreateFileW(pPath, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL)) != INVALID_HANDLE_VALUE)
+	if ((hFile = CreateFileW(pPath, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS,
+		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL)) != INVALID_HANDLE_VALUE)
 	{
 		SetFilePointer(hFile, 0L, NULL, FILE_END);
 		liSize.QuadPart = Size;
@@ -290,7 +292,7 @@ static VOID BinToHex(PCBYTE pbData, DWORD dwDataSize, PSTR pBuf, DWORD dwBufSize
 	}
 }
 
-// The filename must start with one of the strings from gpCoinSymbols.
+// The filename must start with one of the strings from g_CoinSymbols.
 static COIN CoinFromFileName(PCWSTR pFileName)
 {
 	DWORD i;
@@ -412,7 +414,8 @@ static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 	{
 		if (NewLines = CopyAddresses(Coin, pData, pAddresses))
 		{
-			if (NewLines == Lines || NewLines < Lines && (pTmp = (PADDRESS)HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, (PVOID)pAddresses, NewLines * sizeof(ADDRESS))))
+			if (NewLines == Lines || NewLines < Lines && (pTmp = (PADDRESS)HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+				(PVOID)pAddresses, NewLines * sizeof(ADDRESS))))
 			{
 				if (pTmp)
 				{
@@ -424,7 +427,8 @@ static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 				OldSize  = pAlgData->AddressCount * sizeof(ADDRESS);
 				Size	 = NewLines				  * sizeof(ADDRESS);
 
-				if (pTmp = pAlgData->pAddresses ? (PADDRESS)HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY, (PVOID)pAlgData->pAddresses, OldSize + Size) : pAddresses)
+				if (pTmp = pAlgData->pAddresses ? (PADDRESS)HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+					(PVOID)pAlgData->pAddresses, OldSize + Size) : pAddresses)
 				{
 					// If the memory has already been allocated.
 					if (pTmp != pAddresses)
@@ -451,7 +455,7 @@ static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 	return 0;
 }
 
-// Files must only consist of ASCII characters with "\r\n" at the end of each line. Empty lines will be skipped.
+// Encoding can be ANSI or UTF-8. Lines within files must be separated by "\r\n". At the end of the file must be an empty line.
 static BOOL LoadAddresses(VOID)
 {
 	WCHAR			 Path[MAX_PATH];

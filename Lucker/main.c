@@ -91,7 +91,8 @@ static DWORD WINAPI ApplicationRecoveryCallback(PVOID pvParameter)
 		if ((hFile = CreateFileW(Buf, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL)) != INVALID_HANDLE_VALUE)
 		{
 			GetLocalTime(&Time);
-			wsprintfW(Buf, L"[%02u.%02u.%04u %02u:%02u:%02u:%03u]: ApplicationRecoveryCallback() called.\r\n", Time.wDay, Time.wMonth, Time.wYear, Time.wHour, Time.wMinute, Time.wSecond, Time.wMilliseconds);
+			wsprintfW(Buf, L"[%02u.%02u.%04u %02u:%02u:%02u:%03u]: ApplicationRecoveryCallback() called.\r\n",
+				Time.wDay, Time.wMonth, Time.wYear, Time.wHour, Time.wMinute, Time.wSecond, Time.wMilliseconds);
 
 			SetFilePointer(hFile, 0L, NULL, FILE_END);
 			WriteFile(hFile, (PCVOID)Buf, lstrlenW(Buf) * sizeof(WCHAR), &dwSize, NULL);
