@@ -32,7 +32,7 @@ typedef enum {
 	CT_BOTH,
 	CT_UNCOMPRESSED,
 	CT_COMPRESSED,
-} COORDINATE_TYPE;
+} PUBLIC_KEY_TYPE;
 
 typedef struct {
 	COIN Coin;
@@ -60,9 +60,10 @@ typedef struct {
 
 typedef const NETWORK_PREFIXES* PCNETWORK_PREFIXES;
 
-BOOL StartWorkers(DWORD dwCount, COORDINATE_TYPE CoordType, BOOL BindToCores, BOOL SMT);
+BOOL StartWorkers(DWORD dwCount, PUBLIC_KEY_TYPE PublicKeyType, BOOL BindToCores, BOOL SMT);
 VOID StopWorkers(VOID);
 
+PCWSTR PublicKeyTypeToString(PUBLIC_KEY_TYPE Type);
 DWORD64 GetCycleCount(VOID);
 
 static BOOL GetDataPath(PWSTR pPath, DWORD dwSize);

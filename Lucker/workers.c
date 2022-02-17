@@ -21,7 +21,7 @@ static PHANDLE        g_phWorkers  = NULL;
 
 static volatile DWORD64 g_qwCycles;
 
-BOOL StartWorkers(DWORD dwCount, COORDINATE_TYPE CoordType, BOOL BindToCores, BOOL SMT)
+BOOL StartWorkers(DWORD dwCount, PUBLIC_KEY_TYPE PublicKeyType, BOOL BindToCores, BOOL SMT)
 {
 	DWORD i;
 	BOOL  Ok = FALSE;
@@ -38,7 +38,7 @@ BOOL StartWorkers(DWORD dwCount, COORDINATE_TYPE CoordType, BOOL BindToCores, BO
 					{
 						for (i = 0; i < g_dwWorkers; ++i)
 						{
-							if (!(g_phWorkers[i] = CreateThread(NULL, 0, (PTHREAD_START_ROUTINE)WorkerProc, (PVOID)CoordType, 0, NULL)))
+							if (!(g_phWorkers[i] = CreateThread(NULL, 0, (PTHREAD_START_ROUTINE)WorkerProc, (PVOID)PublicKeyType, 0, NULL)))
 								break;
 
 							if (BindToCores)
@@ -108,6 +108,19 @@ VOID StopWorkers(VOID)
 	}
 
 	g_qwCycles = g_dwWorkers = 0;
+}
+
+// The same strings in "flags.c".
+PCWSTR PublicKeyTypeToString(PUBLIC_KEY_TYPE Type)
+{
+	switch (Type)
+	{
+	case CT_BOTH:		  return L"use both compressed and uncompressed";
+	case CT_UNCOMPRESSED: return L"uncompressed only";
+	case CT_COMPRESSED:   return L"compressed only";
+	}
+
+	return NULL;
 }
 
 DWORD64 GetCycleCount(VOID)
@@ -693,8 +706,8 @@ Range of valid ECDSA private keys:
 */
 static DWORD WINAPI WorkerProc(PVOID pvParam)
 {
-	COORDINATE_TYPE CoordType = (COORDINATE_TYPE)pvParam;
-	PEC_CONTEXT		pCtx	  = NULL;
+	PUBLIC_KEY_TYPE PublicKeyType = (PUBLIC_KEY_TYPE)pvParam;
+	PEC_CONTEXT		pCtx          = NULL;
 	DWORD			i,
 					j;
 	BYTE			bPrivKey[SECP256K1_PRIVATE_KEY_SIZE],
@@ -704,7 +717,7 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 					bHashComp[HASH_256_SIZE];
 	EC_PUBLIC_KEY	PubKey;
 	ALGORITHM		Alg;
-	PCADDRESS		pAddress  = NULL;
+	PCADDRESS		pAddress      = NULL;
 
 	if (pCtx = CryptECContextCreate(ECT_SECP256K1))
 	{
@@ -724,7 +737,7 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 							switch (Alg)
 							{
 							case A_1:
-								if (CoordType == CT_BOTH)
+								if (PublicKeyType == CT_BOTH)
 								{
 									CryptECPublicKeyToBytes(pCtx, &PubKey, FALSE, bPubKey,     sizeof(bPubKey)    );
 									CryptECPublicKeyToBytes(pCtx, &PubKey, TRUE,  bPubKeyComp, sizeof(bPubKeyComp));
@@ -741,7 +754,7 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 										}
 									}
 								}
-								else if (CoordType == CT_UNCOMPRESSED)
+								else if (PublicKeyType == CT_UNCOMPRESSED)
 								{
 									CryptECPublicKeyToBytes(pCtx, &PubKey, FALSE, bPubKey, sizeof(bPubKey));
 									HashFromPublicKey(Alg, bPubKey, sizeof(bPubKey), bHash);
@@ -754,7 +767,7 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 										}
 									}
 								}
-								else // CoordType == CT_COMPRESSED
+								else // PublicKeyType == CT_COMPRESSED
 								{
 									CryptECPublicKeyToBytes(pCtx, &PubKey, TRUE, bPubKeyComp, sizeof(bPubKeyComp));
 									HashFromPublicKey(Alg, bPubKeyComp, sizeof(bPubKeyComp), bHashComp);

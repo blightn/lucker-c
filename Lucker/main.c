@@ -50,18 +50,6 @@ static BOOL IsSMTEnabled(PBOOL pEnabled)
 	return Ok;
 }
 
-// The same strings in "flags.c".
-static PCWSTR CoordinateTypeToString(COORDINATE_TYPE Type)
-{
-	switch (Type)
-	{
-	case CT_BOTH:		  return L"use both compressed and uncompressed";
-	case CT_UNCOMPRESSED: return L"uncompressed only";
-	case CT_COMPRESSED:   return L"compressed only";
-	default:			  return L"ERROR";
-	}
-}
-
 static BOOL ValidateFlagsCallback(FLAG_TYPE Type, INT Value)
 {
 	switch (Type)
@@ -69,7 +57,7 @@ static BOOL ValidateFlagsCallback(FLAG_TYPE Type, INT Value)
 	case FT_WORKERS:
 		return Value >= 0;
 
-	case FT_COORDINATES:
+	case FT_PUBLIC_KEY_TYPE:
 		return Value == CT_BOTH || Value == CT_UNCOMPRESSED || Value == CT_COMPRESSED;
 	}
 
@@ -126,6 +114,7 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 	SYSTEM_INFO			SysInfo;
 	BOOL				SMT		 = FALSE;
 	DWORD				dwWorkers;
+	PUBLIC_KEY_TYPE		PublicKeyType;
 	DWORD64				qwCycles = 0;
 
 	pFlags = FlagsParse(Argc, pArgv, (PVALIDATE_FLAGS_ROUTINE)ValidateFlagsCallback, NULL);
@@ -145,10 +134,11 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 		SysInfo.dwNumberOfProcessors /= 2;
 	}
 
-	dwWorkers = pFlags[FT_WORKERS].Value == 0 ? SysInfo.dwNumberOfProcessors : min((DWORD)pFlags[FT_WORKERS].Value, SysInfo.dwNumberOfProcessors);
+	dwWorkers     = pFlags[FT_WORKERS].Value == 0 ? SysInfo.dwNumberOfProcessors : min((DWORD)pFlags[FT_WORKERS].Value, SysInfo.dwNumberOfProcessors);
+	PublicKeyType = (PUBLIC_KEY_TYPE)pFlags[FT_PUBLIC_KEY_TYPE].Value;
 
-	wprintf(L"Workers:\t%u/%u\nCoordinates:\t%s\nBind to cores:\t%s\n\n", dwWorkers, SysInfo.dwNumberOfProcessors,
-		CoordinateTypeToString((COORDINATE_TYPE)pFlags[FT_COORDINATES].Value), pFlags[FT_BIND_WORKERS].Value ? L"yes" : L"no");
+	wprintf(L"Workers:\t%u/%u\nPublic key type:\t%s\nBind to cores:\t%s\n\n", dwWorkers, SysInfo.dwNumberOfProcessors, PublicKeyTypeToString(PublicKeyType),
+		pFlags[FT_BIND_WORKERS].Value ? L"yes" : L"no");
 
 	// To prevent cyclical restarts, the system will only restart the application if it has been running for a minimum of 60 seconds.
 	RegisterApplicationRestart(Argc == 2 ? pArgv[1] : NULL, 0);
@@ -158,7 +148,7 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 	{
 		if (g_hStopEvent = CreateEventW(NULL, TRUE, FALSE, NULL))
 		{
-			if (StartWorkers(dwWorkers, (COORDINATE_TYPE)pFlags[FT_COORDINATES].Value, (BOOL)pFlags[FT_BIND_WORKERS].Value, SMT))
+			if (StartWorkers(dwWorkers, PublicKeyType, (BOOL)pFlags[FT_BIND_WORKERS].Value, SMT))
 			{
 				SetConsoleCtrlHandler((PHANDLER_ROUTINE)HandlerCallback, TRUE);
 				wprintf(L"All workers launched. Press 'CTRL + C' to stop.\n\n");
