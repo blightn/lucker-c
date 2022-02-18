@@ -137,7 +137,7 @@ INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 	dwWorkers     = pFlags[FT_WORKERS].Value == 0 ? SysInfo.dwNumberOfProcessors : min((DWORD)pFlags[FT_WORKERS].Value, SysInfo.dwNumberOfProcessors);
 	PublicKeyType = (PUBLIC_KEY_TYPE)pFlags[FT_PUBLIC_KEY_TYPE].Value;
 
-	wprintf(L"Workers:\t%u/%u\nPublic key type:\t%s\nBind to cores:\t%s\n\n", dwWorkers, SysInfo.dwNumberOfProcessors, PublicKeyTypeToString(PublicKeyType),
+	wprintf(L"Workers: %9u/%u\nPublic key type: %s\nBind to cores: %4s\n\n", dwWorkers, SysInfo.dwNumberOfProcessors, PublicKeyTypeToString(PublicKeyType),
 		pFlags[FT_BIND_WORKERS].Value ? L"yes" : L"no");
 
 	// To prevent cyclical restarts, the system will only restart the application if it has been running for a minimum of 60 seconds.
