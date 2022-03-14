@@ -25,11 +25,11 @@ static const CHAR g_Base58Map[256] =
 BOOL Base58Encode(PCBYTE pbData, SIZE_T DataSize, PSTR pBuf, PSIZE_T pBufSize)
 {
 	SIZE_T ZeroCount,
-		   Size,
-		   i,
-		   End,
-		   j,
-		   Carry;
+	       Size,
+	       i,
+	       End,
+	       j,
+	       Carry;
 
 	if (!DataSize)
 	{
@@ -86,14 +86,14 @@ BOOL Base58Encode(PCBYTE pbData, SIZE_T DataSize, PSTR pBuf, PSIZE_T pBufSize)
 BOOL Base58Decode(PCSTR pData, PBYTE pbBuf, PSIZE_T pBufSize)
 {
 	SIZE_T Len,
-		   Res,
-		   i,
-		   Carry,
-		   j;
+	       Res,
+	       i,
+	       Carry,
+	       j;
 	BYTE   bTmp;
 
-	Len		 = lstrlenA(pData);
-	Res		 = 0;
+	Len      = lstrlenA(pData);
+	Res      = 0;
 	pbBuf[0] = 0x00;
 
 	if (*pBufSize <= Len * 733 / 1000)
@@ -111,15 +111,15 @@ BOOL Base58Decode(PCSTR pData, PBYTE pbBuf, PSIZE_T pBufSize)
 
 		for (j = 0; j < Res; ++j)
 		{
-			Carry	+= pbBuf[j] * (SIZE_T)58;
-			pbBuf[j] = Carry	& 0xFF;
+			Carry   += pbBuf[j] * (SIZE_T)58;
+			pbBuf[j] = Carry    & 0xFF;
 			Carry  >>= 8;
 		}
 
 		while (Carry > 0)
 		{
 			pbBuf[Res++] = Carry & 0xFF;
-			Carry	   >>= 8;
+			Carry      >>= 8;
 		}
 	}
 
@@ -130,8 +130,8 @@ BOOL Base58Decode(PCSTR pData, PBYTE pbBuf, PSIZE_T pBufSize)
 
 	for (i = 0; i < Res / 2; ++i)
 	{
-		bTmp			   = pbBuf[i];
-		pbBuf[i]		   = pbBuf[Res - i - 1];
+		bTmp               = pbBuf[i];
+		pbBuf[i]           = pbBuf[Res - i - 1];
 		pbBuf[Res - i - 1] = bTmp;
 	}
 

@@ -10,14 +10,14 @@ static HANDLE g_hStopEvent = NULL;
 // wmic CPU Get NumberOfCores,NumberOfLogicalProcessors /Format:List
 static BOOL IsSMTEnabled(PBOOL pEnabled)
 {
-	SYSTEM_INFO							  SysInfo;
-	DWORD								  dwSize	= 0,
-										  i,
-										  dwCores;
+	SYSTEM_INFO                           SysInfo;
+	DWORD                                 dwSize    = 0,
+	                                      i,
+	                                      dwCores;
 	PSYSTEM_LOGICAL_PROCESSOR_INFORMATION pProcInfo = NULL,
-										  pCurInfo	= NULL;
-	BOOL								  Enabled	= FALSE,
-										  Ok		= FALSE;
+	                                      pCurInfo  = NULL;
+	BOOL                                  Enabled   = FALSE,
+	                                      Ok        = FALSE;
 
 	ZeroMemory((PVOID)&SysInfo, sizeof(SysInfo));
 	GetNativeSystemInfo(&SysInfo);
@@ -66,11 +66,11 @@ static BOOL ValidateFlagsCallback(FLAG_TYPE Type, INT Value)
 
 static DWORD WINAPI ApplicationRecoveryCallback(PVOID pvParameter)
 {
-	WCHAR	   Buf[MAX_PATH];
-	HANDLE	   hFile	 = INVALID_HANDLE_VALUE;
+	WCHAR      Buf[MAX_PATH];
+	HANDLE     hFile     = INVALID_HANDLE_VALUE;
 	SYSTEMTIME Time;
-	DWORD	   dwSize	 = 0;
-	BOOL	   Cancelled = FALSE;
+	DWORD      dwSize    = 0;
+	BOOL       Cancelled = FALSE;
 
 	if (GetModuleFileNameW(NULL, Buf, ARRAYSIZE(Buf)))
 	{
@@ -110,12 +110,12 @@ static BOOL WINAPI HandlerCallback(DWORD dwCtrlType)
 
 INT wmain(INT Argc, WCHAR* pArgv[], WCHAR* pEnv[])
 {
-	PCCOMMAND_LINE_FLAG pFlags	 = NULL;
-	SYSTEM_INFO			SysInfo;
-	BOOL				SMT		 = FALSE;
-	DWORD				dwWorkers;
-	PUBLIC_KEY_TYPE		PublicKeyType;
-	DWORD64				qwCycles = 0;
+	PCCOMMAND_LINE_FLAG pFlags   = NULL;
+	SYSTEM_INFO         SysInfo;
+	BOOL                SMT      = FALSE;
+	DWORD               dwWorkers;
+	PUBLIC_KEY_TYPE     PublicKeyType;
+	DWORD64             qwCycles = 0;
 
 	pFlags = FlagsParse(Argc, pArgv, (PVALIDATE_FLAGS_ROUTINE)ValidateFlagsCallback, NULL);
 

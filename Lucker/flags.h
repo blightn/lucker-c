@@ -4,7 +4,7 @@
 #include "defines.h"
 
 #define OFF (FALSE)
-#define ON	(TRUE)
+#define ON  (TRUE)
 
 typedef enum {
 	FT_HELP,
@@ -19,11 +19,11 @@ typedef enum {
 } FLAG_ARGUMENT;
 
 typedef struct {
-	PCWSTR		  pName;
-	PCWSTR		  pDescription;
-	FLAG_TYPE	  Type;
+	PCWSTR        pName;
+	PCWSTR        pDescription;
+	FLAG_TYPE     Type;
 	FLAG_ARGUMENT Argument;
-	INT			  Value;
+	INT           Value;
 } COMMAND_LINE_FLAG, *PCOMMAND_LINE_FLAG;
 
 typedef const COMMAND_LINE_FLAG  CCOMMAND_LINE_FLAG;

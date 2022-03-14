@@ -13,21 +13,21 @@
 #pragma comment(lib, "libcrypto.lib")
 #pragma comment(lib, "secp256k1.lib")
 
-#define NT_SUCCESS(Status)			   (((NTSTATUS)(Status)) >= 0) // ntdef.h
+#define NT_SUCCESS(Status)             (((NTSTATUS)(Status)) >= 0) // ntdef.h
 
-#define HASH_256_SIZE				   32
+#define HASH_256_SIZE                  32
 
-#define	SECP256K1_PUBLIC_KEY_SIZE	   65
+#define SECP256K1_PUBLIC_KEY_SIZE      65
 #define SECP256K1_PUBLIC_KEY_COMP_SIZE 33
-#define SECP256K1_PRIVATE_KEY_SIZE	   32
+#define SECP256K1_PRIVATE_KEY_SIZE     32
 
 typedef enum {
 	ECT_SECP256K1
 } EC_TYPE;
 
-typedef secp256k1_context*		PEC_CONTEXT;
-typedef secp256k1_pubkey		EC_PUBLIC_KEY;
-typedef secp256k1_pubkey*		PEC_PUBLIC_KEY;
+typedef secp256k1_context*      PEC_CONTEXT;
+typedef secp256k1_pubkey        EC_PUBLIC_KEY;
+typedef secp256k1_pubkey*       PEC_PUBLIC_KEY;
 typedef const secp256k1_pubkey* PCEC_PUBLIC_KEY;
 
 BOOL CryptRandomInit(VOID);

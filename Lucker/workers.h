@@ -6,16 +6,16 @@
 #include "base58.h"
 #include "crypt.h"
 
-#define DATA_FOLDER				L"Data"
-#define NETWORK_PREFIX_SIZE_MIN	1
-#define NETWORK_PREFIX_SIZE_MAX	2
-#define DECODED_HASH_SIZE		20
-#define CHECKSUM_SIZE			4
+#define DATA_FOLDER             L"Data"
+#define NETWORK_PREFIX_SIZE_MIN 1
+#define NETWORK_PREFIX_SIZE_MAX 2
+#define DECODED_HASH_SIZE       20
+#define CHECKSUM_SIZE           4
 #define LOOP_ITERATIONS         0xFF
 
 typedef enum {
-	A_1,	 // sha256 + ripemd160 (BTC, LTC, etc.)
-	A_2,	 // keccak256 (ETH)
+	A_1,     // sha256 + ripemd160 (BTC, LTC, etc.)
+	A_2,     // keccak256 (ETH)
 	A_COUNT, // Number of algorithms.
 	A_INVALID,
 } ALGORITHM;
@@ -43,7 +43,7 @@ typedef const ADDRESS* PCADDRESS;
 
 typedef struct {
 	PADDRESS pAddresses;
-	SIZE_T	 AddressCount;
+	SIZE_T   AddressCount;
 } ALGORITHM_DATA, *PALGORITHM_DATA;
 
 typedef struct {

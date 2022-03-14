@@ -115,7 +115,7 @@ PCWSTR PublicKeyTypeToString(PUBLIC_KEY_TYPE Type)
 {
 	switch (Type)
 	{
-	case CT_BOTH:		  return L"use both compressed and uncompressed";
+	case CT_BOTH:         return L"use both compressed and uncompressed";
 	case CT_UNCOMPRESSED: return L"uncompressed only";
 	case CT_COMPRESSED:   return L"compressed only";
 	}
@@ -151,12 +151,12 @@ static BOOL GetDataPath(PWSTR pPath, DWORD dwSize)
 // TODO: MMF.
 static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize)
 {
-	HANDLE		  hFile  = INVALID_HANDLE_VALUE;
+	HANDLE        hFile  = INVALID_HANDLE_VALUE;
 	LARGE_INTEGER liSize,
-				  liTmp;
-	PSTR		  pData  = NULL,
-				  pTmp	 = NULL;
-	DWORD		  dwRead = 0;
+	              liTmp;
+	PSTR          pData  = NULL,
+	              pTmp   = NULL;
+	DWORD         dwRead = 0;
 
 	if ((hFile = CreateFileW(pPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
 		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL)) != INVALID_HANDLE_VALUE)
@@ -179,7 +179,7 @@ static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize)
 					if (!ReadFile(hFile, (PVOID)pTmp, liTmp.LowPart ? liTmp.LowPart : MAXDWORD, &dwRead, NULL) || !dwRead)
 						break;
 
-					pTmp		   += dwRead;
+					pTmp           += dwRead;
 					liTmp.QuadPart -= dwRead;
 				}
 
@@ -208,10 +208,10 @@ static PSTR ReadFileData(PCWSTR pPath, PSIZE_T pSize)
 // TODO: MMF.
 static BOOL WriteFileData(PCWSTR pPath, PCBYTE pbData, SIZE_T Size)
 {
-	HANDLE		  hFile		= INVALID_HANDLE_VALUE;
+	HANDLE        hFile     = INVALID_HANDLE_VALUE;
 	LARGE_INTEGER liSize;
-	DWORD		  dwWritten	= 0;
-	BOOL		  Ok		= FALSE;
+	DWORD         dwWritten = 0;
+	BOOL          Ok        = FALSE;
 
 	if ((hFile = CreateFileW(pPath, GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_ALWAYS,
 		FILE_ATTRIBUTE_NORMAL | FILE_FLAG_SEQUENTIAL_SCAN, NULL)) != INVALID_HANDLE_VALUE)
@@ -226,7 +226,7 @@ static BOOL WriteFileData(PCWSTR pPath, PCBYTE pbData, SIZE_T Size)
 			if (!(WriteFile(hFile, (PCVOID)pbData, liSize.LowPart ? liSize.LowPart : MAXDWORD, &dwWritten, NULL)) || !dwWritten)
 				break;
 
-			pbData			+= dwWritten;
+			pbData          += dwWritten;
 			liSize.QuadPart -= dwWritten;
 		}
 
@@ -277,9 +277,9 @@ static BOOL HexToBin(BYTE bHex, PBYTE pbOut)
 static BOOL HexToBinA(PCSTR pHex, PBYTE pbBuf, DWORD dwSize)
 {
 	DWORD dwLen,
-		  i;
+	      i;
 	BYTE  bA,
-		  bB;
+	      bB;
 
 	if (!(dwLen = lstrlenA(pHex)) || dwLen % 2 || dwLen / 2 > dwSize)
 		return FALSE;
@@ -351,7 +351,7 @@ static PCNETWORK_PREFIXES NetworkPrefixesFromCoin(COIN Coin)
 static BOOL DecodeAddress(COIN Coin, PCSTR pAddress, PADDRESS pAddresses)
 {
 	SIZE_T Len,
-		   Size;
+	       Size;
 	BYTE   bBuf[64];
 	BOOL   Ok = FALSE;
 
@@ -414,11 +414,11 @@ static SIZE_T CopyAddresses(COIN Coin, PCSTR pData, PADDRESS pAddresses)
 // There should be no empty spaces between addresses (reallocation is required).
 static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 {
-	SIZE_T			Size,
-					NewLines,
-					OldSize;
-	PADDRESS		pAddresses = NULL,
-					pTmp	   = NULL;
+	SIZE_T          Size,
+	                NewLines,
+	                OldSize;
+	PADDRESS        pAddresses = NULL,
+	                pTmp       = NULL;
 	PALGORITHM_DATA pAlgData   = NULL;
 
 	Size = Lines * sizeof(ADDRESS);
@@ -433,12 +433,12 @@ static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 				if (pTmp)
 				{
 					pAddresses = pTmp;
-					pTmp	   = NULL;
+					pTmp       = NULL;
 				}
 
 				pAlgData = &g_AlgorithmData[AlgorithmFromCoin(Coin)];
 				OldSize  = pAlgData->AddressCount * sizeof(ADDRESS);
-				Size	 = NewLines				  * sizeof(ADDRESS);
+				Size     = NewLines               * sizeof(ADDRESS);
 
 				if (pTmp = pAlgData->pAddresses ? (PADDRESS)HeapReAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
 					(PVOID)pAlgData->pAddresses, OldSize + Size) : pAddresses)
@@ -452,9 +452,9 @@ static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 						pAddresses = NULL;
 					}
 
-					pAlgData->pAddresses	= pTmp;
+					pAlgData->pAddresses    = pTmp;
 					pAlgData->AddressCount += NewLines;
-					pTmp					= NULL;
+					pTmp                    = NULL;
 
 					return NewLines;
 				}
@@ -471,17 +471,17 @@ static SIZE_T ParseAddresses(COIN Coin, PCSTR pData, SIZE_T Lines)
 // Encoding can be ANSI or UTF-8. Lines within files must be separated by "\r\n". At the end of the file must be an empty line.
 static BOOL LoadAddresses(VOID)
 {
-	WCHAR			 Path[MAX_PATH];
+	WCHAR            Path[MAX_PATH];
 	WIN32_FIND_DATAW FindData;
-	HANDLE			 hFind		 = INVALID_HANDLE_VALUE;
-	SIZE_T			 AllFiles	 = 0,
-		             FileLines,
-		             ParsedLines,
-		             LoadedFiles = 0,
-					 LoadedLines = 0;
-	COIN			 Coin;
-	PSTR			 pData		 = NULL;
-	BOOL			 Ok			 = FALSE;
+	HANDLE           hFind       = INVALID_HANDLE_VALUE;
+	SIZE_T           AllFiles    = 0,
+	                 FileLines,
+	                 ParsedLines,
+	                 LoadedFiles = 0,
+	                 LoadedLines = 0;
+	COIN             Coin;
+	PSTR             pData       = NULL;
+	BOOL             Ok          = FALSE;
 
 	wprintf(L"Loading files with addresses...\n");
 
@@ -573,9 +573,9 @@ static VOID HashFromPublicKey(ALGORITHM Algorithm, PCBYTE pbPulicKey, DWORD dwSi
 static VOID PrivateKeyToWIF(PCBYTE pbPrivateKey, DWORD dwKeySize, COIN Coin, BOOL Compress, PSTR pBuf, DWORD dwBufSize)
 {
 	PCNETWORK_PREFIXES pPrefixes = NULL;
-	BYTE			   bBuf[64],
-					   bHash[HASH_256_SIZE];
-	DWORD			   dwResSize = 0;
+	BYTE               bBuf[64],
+	                   bHash[HASH_256_SIZE];
+	DWORD              dwResSize = 0;
 	SIZE_T             Size;
 
 	if (Coin == C_ETH)
@@ -583,7 +583,7 @@ static VOID PrivateKeyToWIF(PCBYTE pbPrivateKey, DWORD dwKeySize, COIN Coin, BOO
 
 	pPrefixes = NetworkPrefixesFromCoin(Coin);
 
-	CopyMemory((PVOID)bBuf,	(PCVOID)pPrefixes->bPrivPrefix, pPrefixes->dwPrivPrefixSize);
+	CopyMemory((PVOID)bBuf, (PCVOID)pPrefixes->bPrivPrefix, pPrefixes->dwPrivPrefixSize);
 	dwResSize += pPrefixes->dwPrivPrefixSize;
 
 	CopyMemory((PVOID)&bBuf[dwResSize], (PCVOID)pbPrivateKey, dwKeySize);
@@ -595,7 +595,7 @@ static VOID PrivateKeyToWIF(PCBYTE pbPrivateKey, DWORD dwKeySize, COIN Coin, BOO
 		dwResSize      += 1;
 	}
 
-	CryptSHA256(bBuf,  dwResSize,	  bHash);
+	CryptSHA256(bBuf,  dwResSize,     bHash);
 	CryptSHA256(bHash, HASH_256_SIZE, bHash);
 
 	CopyMemory((PVOID)&bBuf[dwResSize], (PCVOID)bHash, CHECKSUM_SIZE);
@@ -612,9 +612,9 @@ static VOID PrivateKeyToWIF(PCBYTE pbPrivateKey, DWORD dwKeySize, COIN Coin, BOO
 static VOID AddressToString(PCADDRESS pAddress, PSTR pBuf, DWORD dwSize)
 {
 	PCNETWORK_PREFIXES pPrefixes = NULL;
-	BYTE			   bBuf[64],
-					   bHash[HASH_256_SIZE];
-	DWORD			   dwResSize = 0;
+	BYTE               bBuf[64],
+	                   bHash[HASH_256_SIZE];
+	DWORD              dwResSize = 0;
 	SIZE_T             Size;
 
 	pPrefixes = NetworkPrefixesFromCoin(pAddress->Coin);
@@ -627,7 +627,7 @@ static VOID AddressToString(PCADDRESS pAddress, PSTR pBuf, DWORD dwSize)
 		CopyMemory((PVOID)&bBuf[dwResSize], (PCVOID)pAddress->bHash, sizeof(pAddress->bHash));
 		dwResSize += sizeof(pAddress->bHash);
 
-		CryptSHA256(bBuf,  dwResSize,	  bHash);
+		CryptSHA256(bBuf,  dwResSize,     bHash);
 		CryptSHA256(bHash, HASH_256_SIZE, bHash);
 
 		CopyMemory((PVOID)&bBuf[dwResSize], (PCVOID)bHash, CHECKSUM_SIZE);
@@ -662,7 +662,7 @@ Address: 0x38e73420d07d32c789b4349988fd67a667a61892
 static VOID SavePrivateKey(PCADDRESS pAddress, PCBYTE pbPrivateKey, DWORD dwSize)
 {
 	CHAR  Buf[512],
-		  Tmp[64];
+	      Tmp[64];
 	WCHAR Path[MAX_PATH];
 
 	StringCchPrintfA(Buf, ARRAYSIZE(Buf), "\r\n%S private key found (HEX): ", SymbolFromAddress(pAddress));
@@ -707,17 +707,17 @@ Range of valid ECDSA private keys:
 static DWORD WINAPI WorkerProc(PVOID pvParam)
 {
 	PUBLIC_KEY_TYPE PublicKeyType = (PUBLIC_KEY_TYPE)pvParam;
-	PEC_CONTEXT		pCtx          = NULL;
-	DWORD			i,
-					j;
-	BYTE			bPrivKey[SECP256K1_PRIVATE_KEY_SIZE],
-					bPubKey[SECP256K1_PUBLIC_KEY_SIZE],
-					bPubKeyComp[SECP256K1_PUBLIC_KEY_COMP_SIZE],
-					bHash[HASH_256_SIZE],
-					bHashComp[HASH_256_SIZE];
-	EC_PUBLIC_KEY	PubKey;
-	ALGORITHM		Alg;
-	PCADDRESS		pAddress      = NULL;
+	PEC_CONTEXT     pCtx          = NULL;
+	DWORD           i,
+	                j;
+	BYTE            bPrivKey[SECP256K1_PRIVATE_KEY_SIZE],
+	                bPubKey[SECP256K1_PUBLIC_KEY_SIZE],
+	                bPubKeyComp[SECP256K1_PUBLIC_KEY_COMP_SIZE],
+	                bHash[HASH_256_SIZE],
+	                bHashComp[HASH_256_SIZE];
+	EC_PUBLIC_KEY   PubKey;
+	ALGORITHM       Alg;
+	PCADDRESS       pAddress      = NULL;
 
 	if (pCtx = CryptECContextCreate(ECT_SECP256K1))
 	{
@@ -748,7 +748,7 @@ static DWORD WINAPI WorkerProc(PVOID pvParam)
 									for (j = 0, pAddress = g_AlgorithmData[Alg].pAddresses; j < g_AlgorithmData[Alg].AddressCount; ++j, ++pAddress)
 									{
 										if (!memcmp((PCVOID)bHash,     (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)) ||
-											!memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
+										    !memcmp((PCVOID)bHashComp, (PCVOID)pAddress->bHash, sizeof(pAddress->bHash)))
 										{
 											SavePrivateKey(pAddress, bPrivKey, sizeof(bPrivKey));
 										}
